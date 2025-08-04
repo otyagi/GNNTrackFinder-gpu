@@ -1,0 +1,6 @@
+MACRO(Write_Geant4Data_Variables_jupy)
+Set(Geant4Data_Variables_jupy "")
+foreach(DATASET  ${Geant4_DATASETS})
+  string(CONCAT Geant4Data_Variables_jupy ${Geant4Data_Variables_jupy} "    \"${Geant4_DATASET_${DATASET}_ENVVAR}\": \"${Geant4_DATASET_${DATASET}_PATH}\",\n")
+endforeach()
+ENDMACRO()

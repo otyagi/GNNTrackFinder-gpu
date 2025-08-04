@@ -1,0 +1,110 @@
+#  Copyright (C) 2023 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+#  SPDX-License-Identifier: GPL-3.0-only
+#  Authors: Sergei Zharko [committer] 
+#
+#  @file   ca_params_mcbm.yaml
+#  @brief  Main parameter list for CA tracking in the mCBM running mode
+#  @since  26.05.2023
+#  @author S.Zharko <s.zharko@gsi.de>
+# 
+# The parameter list contains default parameters to run tracking in a given setup
+# ...
+ca:
+  # Parameters defining the CA tracking algorithm execution logic
+  core:
+    # Common parameters for the entire core
+    common:
+      # Sequence of station names to be IGNORED by tracking
+      # A station name contains the official detector subsystem abbreviation (MVD, STS, MUCH, TRD, TOF), 
+      # which is followed by the local geometry index of station (the index, which is used in the detector
+      # interface classes). If there is no index provided, the whole detector subsystem is skipped.
+      # Examples:  
+      # 1) Turn the first and the second STS in the geometry and the full TRD detector off
+      #     inactive_stations: ['STS:0', 'STS:1', 'TRD']
+      # 2) Turn first TOF station in the geometry off
+      #     inactive_stations: [TOF:0]
+      # 3) Turn the full TOF off
+      #     inactive_stations: [TOF]
+      #inactive_stations: ['MUCH']
+      inactive_stations: ['MVD', 'MUCH']
+
+      # Misalignment tolerances x[cm], y[cm], t[ns]
+      misalignment_tolerance: 
+        sts:  [0.0, 0.0, 100.0]
+        much: [0.0, 0.0, 100.0]
+        trd:  [0.0, 0.0, 100.0]
+        tof:  [0.0, 0.0, 100.0]
+
+      # Random seed
+      random_seed: 1
+
+    # Track finder parameters 
+    track_finder:
+      # Iteration sequence
+      # The iterations themselves are defined in the ca/possible_iterations branch.
+      #iteration_sequence: ['FastPrim', 'AllPrim', 'AllPrimJump', 'AllSec']
+      iteration_sequence: ['AllPrim', 'AllSec']
+      
+      # Flag to suppress ghost tracks or not (true/false)
+      is_ghost_suppression: false
+
+      # Max number of doublets per singlet
+      max_doublets_per_singlet: 150
+
+      # Max number of triplets per doublet
+      max_triplets_per_doublet: 15
+    
+    # Developement flags
+    dev:
+      ignore_hit_search_areas:      true
+      use_of_original_field:        false
+      match_doublets_via_mc:        false
+      match_triplets_via_mc:        false
+      extend_tracks_via_mc:         false
+      suppress_overlap_hits_via_mc: false
+      par_search_w_used:            false
+
+  # Full set of default iterations. Each iteration is assigned to a target track group and has recommended set of 
+  # parameters. Later, the iterations from this list can be accessed from user configuration file
+  possible_iterations:
+    #
+    # A default iteration of CA tracking, is used to initialize all the parameter fields
+    # of other iterations, if the corresponding field is missing
+    #
+    
+    - name: "Default"
+      track_chi2_cut:           10.
+      triplet_chi2_cut:         23.4450
+      triplet_final_chi2_cut:   23.4450
+      doublet_chi2_cut:         7.56327
+      pick_gather:              4.0
+      triplet_link_chi2:        125.
+      max_qp:                   10.   # 1 / 10. [GeV/c]^-1
+      max_slope_pv:             9.5
+      max_slope:                2.748
+      max_dz:                   0.1
+      target_pos_sigma_x:       0.3
+      target_pos_sigma_y:       0.3
+      min_n_hits:               3
+      min_n_hits_station_0:     3
+      first_station_index:      0
+      is_extend_tracks:         true
+      is_primary:               false
+      is_electron:              false
+      max_station_gap:          2
+      is_track_from_triplets:   false
+     
+    - name: "AllPrim"
+      base_iteration:           "Default"
+      target_pos_sigma_x:       1.
+      target_pos_sigma_y:       1.
+      is_primary:               true
+
+    - name: "AllSec"
+      base_iteration:           "Default"
+      target_pos_sigma_x:       10.
+      target_pos_sigma_y:       10.
+      is_primary:               false
+  
+...
+

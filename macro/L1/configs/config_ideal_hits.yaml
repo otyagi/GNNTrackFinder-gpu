@@ -1,0 +1,87 @@
+#  Copyright (C) 2023 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+#  SPDX-License-Identifier: GPL-3.0-only
+#  Authors: Sergei Zharko [committer]
+#
+## @file   config_ideal_hits_mcbm.yaml
+## @brief  Configuration file for ideal hit producers
+## @since  28.06.2023
+## @author Sergei Zharko <s.zharko@gsi.de>
+
+ideal_hit_producer:
+  #
+  # Flags are defined for each station
+  # 0 - real hits
+  # 1 - real hit position and time are adjusted with MC (exact quantity values are used)
+  # 2 - real hit position and time are adjusted with MC (true values are smeared within corresponding error)
+  # 3 - ideal hits are created (exact quantity values are used)
+  # 4 - ideal hits are created (true values are smeared withing errors, defined in section parameters)
+  flags:
+    sts:
+      0: 4
+      1: 4
+      2: 4
+      3: 4
+      4: 4
+      5: 4
+      6: 4
+      7: 4
+
+  #
+  # Notes:
+  # 1) For MVD, MuCh, TRD and TOF du corresponds to dx, and dv corresponds to dy
+  # 2) Spatial errors are expressed in cm, time errors are expressed in ns
+  # 3) pdf stands for probability density function
+  #
+  # Available PDFs:
+  #   g: bounded gaussian distribution
+  #   u: uniform distribution
+  parameters:
+    sts:
+      0:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      1:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      2:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      3:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      4:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      5:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      6:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }
+      7:
+        {
+          du: { angle: 0.0, value: 15.e-4, pdf: g },
+          dv: { angle: 7.5, value: 15.e-4, pdf: g },
+          dt: { value: 2.7, pdf: g },
+        }

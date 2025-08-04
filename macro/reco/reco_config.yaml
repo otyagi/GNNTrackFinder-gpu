@@ -1,0 +1,18 @@
+trigger:
+  detector: STS
+  window: 10
+  threshold: 100
+  deadtime: 50
+eventbuilder:
+  BMON:  [-20, 30]
+  STS:   [-20, 30]
+  MUCH:  [-20, 30]
+  TRD :  [-20, 30]
+  TRd2D: [-20, 30]
+  TOF:   [-20, 30]
+  RICH:  [-20, 30]
+  FSD:   [-20, 30]
+selector:
+  minDigis:
+    BMON: 1
+

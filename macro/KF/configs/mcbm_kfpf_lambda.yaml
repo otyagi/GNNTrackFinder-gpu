@@ -1,0 +1,31 @@
+# Copyright (C) 2025 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+# SPDX-License-Identifier: GPL-3.0-only
+# Authors: Sergei Zharko [committer] */
+#
+# \file   mcbm_kfpf_lambda.yaml
+# \date   29.01.2025
+# \brief  Standard configuration for the lambda finding in mCBM
+# \author Sergei Zharko <s.zharko@gsi.de>
+
+reconstruct_pdg: 3122     # Lambda -> pi- p
+bmon_address: 0x00202806  # Address of reference BMON diamond
+t0_offset: 0.12           # Time offset for T0 [ns]
+qa_uncertainty: 0.1       # Assigned relative uncertainty for the q/p estimation
+primary_pdg: 321          # Assigned PDG code for primary tracks
+
+cuts:  # Different cuts
+  kfp:  # KFParticleFinder specific cuts
+    min_decay_length: 5.  # Minimal decay length of particles [cm]
+    min_decay_ldl: 1.     # Minimal value of decay length to decay length error ratio
+    max_chi2_ndf_prim: 0. # Maximal chi2/NDF for primary particles
+    max_chi2_ndf_geo: 50. # Maximal chi2/NDF for V0 candidates
+  particles:  # Defined particle
+    - pdg: -211  # Pion
+      min_dca: 1.5        # [cm]
+      min_velocity: 25.   # [cm/ns]
+      max_velocity: 29.5  # [cm/ns]
+    - pdg: 2212  # Proton
+      min_dca: 0.5       # [cm]
+      min_velocity: 15.  # [cm/ns]
+      max_velocity: 28.  # [cm/ns]
+

@@ -1,0 +1,7 @@
+all_*.par
+data/*.root
+data/*.tsa
+data/qa/*.root
+CbmRecoUnpack.perf.root
+gphysi.dat
+urqmd*.root

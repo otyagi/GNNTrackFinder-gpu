@@ -1,0 +1,5 @@
+add_subdirectory(archive_explorer)
+add_subdirectory(histserv)
+add_subdirectory(online_par_dump)
+add_subdirectory(tsa_dump)
+add_subdirectory(run_info)

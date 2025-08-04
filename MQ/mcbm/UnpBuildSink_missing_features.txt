@@ -1,0 +1,4 @@
+Low priority
+- Pub-Sub Queue from Sink to intermediate devices (unpackers, Event builders, ?calibrators?, ...) to signal that last TS was received and dumped and Transition
+  `Active -> Ready -> Stop -> End` can be done (e.g. through a Finish method)
+- Empty/custom TsEventHeader and event vector when dumping missing TS in Sink (vector maybe already OK)

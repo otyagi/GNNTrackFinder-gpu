@@ -1,0 +1,161 @@
+---
+AccessModifierOffset: -1
+
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: true
+AlignConsecutiveBitFields: true
+AlignConsecutiveDeclarations: false
+#AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+
+AllowAllArgumentsOnNextLine: false
+AllowAllConstructorInitializersOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: false
+
+#AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
+
+BinPackArguments: true
+BinPackParameters: true
+
+# Discuss
+BreakBeforeBinaryOperators: NonAssignment
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel:        false
+  AfterClass:            false
+  AfterControlStatement: Never
+  AfterEnum:             false
+  AfterFunction:         true
+  AfterNamespace:        true
+  AfterObjCDeclaration:  false
+  AfterStruct:           false
+  AfterUnion:            false
+  AfterExternBlock:      false
+  BeforeCatch:           true
+  BeforeElse:            true
+  BeforeLambdaBody:      false
+  BeforeWhile:           false
+  IndentBraces:          false
+  SplitEmptyFunction:    true
+  SplitEmptyRecord:      true
+  SplitEmptyNamespace:   true
+
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: AfterColon
+
+#Discuss
+BreakStringLiterals: true
+
+ColumnLimit: 120
+CompactNamespaces: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+Cpp11BracedListStyle: true
+DeriveLineEnding: false
+DerivePointerAlignment: false
+DisableFormat: false
+ExperimentalAutoDetectBinPacking: false
+FixNamespaceComments: true
+
+# Implement ordering of include statements
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^("|<)Cbm'
+    Priority:        1
+  - Regex:           '^("|<).*/Cbm'
+    Priority:        1
+  - Regex:          '".*"'
+    Priority:        1
+  - Regex:           '^("|<).*slice'
+    Priority:        2
+  - Regex:           '^("|<)Monitor.hpp'
+    Priority:        2
+  - Regex:           '^("|<)System.hpp'
+    Priority:        2
+  - Regex:           '^("|<)Fair'
+    Priority:        3
+  - Regex:           '^("|<)Logger.h'
+    Priority:        3
+  - Regex:           '^("|<)T.*\.h'
+    Priority:        4
+  - Regex:           '^("|<)Rt.*\.h'
+    Priority:        4
+  - Regex:           '^("|<)boost'
+    Priority:        5
+  - Regex:           '^<.*[^\.]h>'
+    Priority:        6
+  - Regex:           '^<.*[^\.h]>'
+    Priority:        6
+  - Regex:           '^<.*>'
+    Priority:        7
+  - Regex:           '.*'
+    Priority:        8
+
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentExternBlock: Indent
+IndentGotoLabels: false
+IndentPPDirectives: None
+IndentWidth: 2
+IndentWrappedFunctionNames: false
+
+KeepEmptyLinesAtTheStartOfBlocks: true
+Language: Cpp
+MaxEmptyLinesToKeep: 2
+NamespaceIndentation: All
+ObjCBinPackProtocolList: Auto
+ObjCBlockIndentWidth: 2
+
+#Discuss Penalties
+PenaltyBreakAssignment: 2
+
+PointerAlignment: Left
+ReflowComments: false
+SortIncludes: true
+SortUsingDeclarations: true
+
+SpaceAfterCStyleCast: true
+#SpaceAfterLogicalNot: true
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+WhitespaceSensitiveMacros: ['CBM_ENUM_DICT', 'CBM_YAML_PROPERTIES']
+StatementMacros: ['CBM_PARALLEL_FOR']
+
+Standard: c++11
+
+TabWidth: 8
+UseCRLF: false
+UseTab: Never
+...

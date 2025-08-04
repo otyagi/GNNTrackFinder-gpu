@@ -1,0 +1,133 @@
+/* Copyright (C) 2010-2020 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+   SPDX-License-Identifier: GPL-3.0-only
+   Authors: Volker Friese [committer], Florian Uhlig */
+
+// --------------------------------------------------------------------------
+//
+// Macro for local MVD reconstruction from MC data
+//
+// Tasks:  CbmMvdHitProducer
+//
+//
+// V. Friese   06/02/2007
+//
+// --------------------------------------------------------------------------
+void mvd_qa3_digitize(const char* setup = "sis100_electron")
+{
+
+  // ========================================================================
+  //          Adjust this part according to your requirements
+
+  TString inDir = gSystem->Getenv("VMCWORKDIR");
+
+  TString outDir = "data/";
+  // Input file (MC events)
+  TString inFile = outDir + "mvd.mcQA.root";
+
+  // Parameter file name
+  TString parFile = outDir + "params.root";
+
+  // Output file
+  TString outFile = outDir + "mvd.rawQA.root";
+
+  // Background file (MC events, for pile-up)
+  TString bgFile = inFile;
+
+  // Delta file (Au Ions)
+  TString deltaFile = outDir + "mvd.mcDelta.root";
+
+  // Number of events to process
+  Int_t nEvents = 5;
+
+  // Verbosity level (0=quiet, 1=event level, 2=track level, 3=debug)
+  Int_t iVerbose = 3;
+
+  FairLogger* logger = FairLogger::GetLogger();
+  logger->SetLogScreenLevel("INFO");
+  logger->SetLogVerbosityLevel("LOW");
+
+  TString setupFile  = inDir + "/geometry/setup/setup_" + setup + ".C";
+  TString setupFunct = "setup_";
+  setupFunct         = setupFunct + setup + "()";
+
+  gROOT->LoadMacro(setupFile);
+  gInterpreter->ProcessLine(setupFunct);
+
+  // In general, the following parts need not be touched
+  // ========================================================================
+
+
+  // ----    Debug option   -------------------------------------------------
+  gDebug = 0;
+  // ------------------------------------------------------------------------
+
+
+  // -----   Timer   --------------------------------------------------------
+  TStopwatch timer;
+  timer.Start();
+  // ------------------------------------------------------------------------
+
+
+  // -------   MVD Digitiser   ----------------------------------------------
+  CbmMvdDigitizer* digi = new CbmMvdDigitizer("MVDDigitiser", 0, iVerbose);
+  std::cout << "Adding Task:  CbmMvdDigitiser... " << std::endl;
+  //digi->ShowDebugHistograms();
+
+  //--- Pile Up -------
+  /*
+  Int_t pileUpInMVD = 2;  // use 1 or higher
+
+  digi->SetBgFileName(bgFile);
+  digi->SetBgBufferSize(5);  //for simulation this buffer should contain > 2 * pileUpInMVD mBias events.
+  //default = few 100 (increase for high pile-up, reduce to limit memory consumption)
+  digi->SetPileUp(pileUpInMVD - 1);
+
+
+  //--- Delta electrons -------
+  digi->SetDeltaName(deltaFile);
+  digi->SetDeltaBufferSize(50);  //for simulation, this buffer must contain at least pileUpInMVD*200 delta electrons
+  digi->SetDeltaEvents(2);       //valid for QA-purposes only, use next line for simulations
+  //digi->SetDeltaEvents(pileUpInMVD*100); // for simulation assumes 1% target
+
+  //digi->ShowDebugHistograms();
+  // ------------------------------------------------------------------------
+  */
+
+  // -----   Digitization run   ---------------------------------------------
+  CbmDigitization run;
+
+
+  run.SetOutputFile(outFile, kTRUE);
+  run.SetParameterRootFile(parFile);
+  run.SetMode(cbm::sim::Mode::Timebased);
+  cbm::sim::TimeDist timeDist = cbm::sim::TimeDist::Uniform;
+  run.SetDigitizer(ECbmModuleId::kMvd, digi);
+
+  run.AddInput(0, inFile, timeDist, 2e4);
+
+  run.Run(nEvents);
+  // ------------------------------------------------------------------------
+
+
+  // -----   Finish   ----------------------------------------------------------
+  timer.Stop();
+  Double_t rtime = timer.RealTime();
+  Double_t ctime = timer.CpuTime();
+  std::cout << std::endl << std::endl;
+  std::cout << "Macro finished successfully." << std::endl;
+  std::cout << "Output file is " << outFile << std::endl;
+  std::cout << "Parameter file is " << parFile << std::endl;
+  std::cout << "Real time " << rtime << " s, CPU time " << ctime << " s" << std::endl;
+  std::cout << std::endl;
+  // ---------------------------------------------------------------------------
+
+  std::cout << " Test passed" << std::endl;
+  std::cout << " All ok " << std::endl;
+  //digi->Finish();
+
+  /*digi->CollectHistograms();
+  TObjArray* digiHisto=digi->GetHistograms();
+  std::cout << "Received HistoArray with Address " << digiHisto << std::endl;
+  std::cout << "The number of entries is  " << digiHisto->GetEntriesFast() << std::endl;
+  ((TH1*)digiHisto->At(0))->Draw();*/
+}

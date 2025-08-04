@@ -1,0 +1,21 @@
+global:
+  log_level: INFO
+  log_verbose: LOW
+  log_color: true
+  mode: event
+  nTimeslices: -1
+  firstTimeslice: -1
+detectors:
+  deactivate: 
+    - ""
+  deactivateAllBut: ""
+timeslice:
+  timeslicelength: 1.e5     
+  storeAllTimeslices: false
+  startTime: 1000
+  timeDist: poisson
+background:
+  produceNoise: false
+sources:
+  - { id: 0, rate: 1.e5, treeAccessMode: regular, embedToId: -1 }
+#TODO: could be potential error to add input via -t file.tra.root in different order than list of sources here

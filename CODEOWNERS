@@ -1,0 +1,130 @@
+# Ending a path in a `/` will specify the code owners for every file
+# nested in that directory, on any level
+/          @f.uhlig @v.friese @p.-a.loizeau
+/cmake/    @f.uhlig
+/external/ @f.uhlig
+/scripts/  @f.uhlig @p.-a.loizeau
+
+# Cleanup and proper separation needed
+/MQ/    @f.uhlig @p.-a.loizeau
+/fles/  @f.uhlig @p.-a.loizeau
+/macro/ @f.uhlig @p.-a.loizeau
+
+/macro/C2F/      @a.andronic @k.piasecki
+/macro/analysis/ @a.andronic @k.piasecki
+/macro/KF/       @se.gorbunov
+
+# Core
+/core/             @f.uhlig @v.friese @p.-a.loizeau
+/core/qa/          @se.gorbunov @s.zharko
+/core/data/test/   @f.uhlig
+/core/data/raw/    @p.-a.loizeau
+/core/base/utils/  @f.uhlig
+/core/base/report/ @f.uhlig
+/core/base/draw/   @f.uhlig
+
+# Algo
+/algo/ @d.smith @fweig
+
+# Simulation
+/sim/                    @f.uhlig @v.friese @p.-a.loizeau
+#/sim/transport/geosetup/ @e.lavrik
+
+# Reco
+/reco/              @f.uhlig @v.friese @p.-a.loizeau
+/reco/littrack/     @se.gorbunov
+/reco/L1/           @se.gorbunov @s.zharko
+/reco/eventbuilder/ @d.smith
+/reco/KF/           @se.gorbunov @s.zharko
+
+# Analysis
+/analysis/                                 @a.andronic @k.piasecki
+/analysis/PWGC2F/femtoscopy/               @wielanek_AT_if.pw.edu.pl
+/analysis/common/                          @a.andronic @k.piasecki
+/analysis/PWGHAD/                          @a.andronic @k.piasecki
+/analysis/PWGCHA/                          @a.andronic @k.piasecki
+/analysis/PWGDIL/                          @a.andronic @k.piasecki
+/analysis/PWGDIL/dielectron/pi0eta/        @c.pauly
+/analysis/PWGDIL/dielectron/papaframework/ @a_meye37_AT_uni-muenster.de
+/analysis/PWGDIL/dielectron/lmvm/          @a.andronic @k.piasecki
+/analysis/PWGDIL/dielectron/conversion/    @c.pauly
+/analysis/PWGDIL/dimuon/                   @a.andronic @k.piasecki
+
+## Detectors
+
+# TRD
+/core/data/trd/       @a.bercuci @p.kaehler
+/core/data/test/trd/  @a.bercuci @p.kaehler
+/core/detectors/trd/  @a.bercuci @p.kaehler
+/macro/trd/           @a.bercuci @p.kaehler
+/sim/detectors/trd/   @a.bercuci @p.kaehler
+/reco/detectors/trd/  @a.bercuci @p.kaehler
+/algo/detectors/trd/  @a.bercuci @p.kaehler
+
+# PSD
+/analysis/detectors/psd/ @v.friese
+/core/data/psd/          @v.friese
+/core/data/test/psd/     @v.friese
+/core/detectors/psd/     @v.friese
+/macro/psd/              @v.friese
+/sim/detectors/psd/      @v.friese
+/reco/detectors/psd/     @v.friese
+
+# FSD
+/analysis/detectors/fsd/ @dvorar10_AT_fjfi.cvut.cz
+/core/data/fsd/          @dvorar10_AT_fjfi.cvut.cz
+/core/detectors/fsd/     @dvorar10_AT_fjfi.cvut.cz
+/sim/detectors/fsd/      @dvorar10_AT_fjfi.cvut.cz
+/reco/detectors/fsd/     @dvorar10_AT_fjfi.cvut.cz
+
+# MUCH
+/core/data/much/         @v.singhal
+/core/data/test/much/    @v.singhal
+/core/detectors/much/    @v.singhal
+/macro/much/             @v.singhal
+/sim/detectors/much/     @v.singhal
+/reco/detectors/much/    @v.singhal
+/algo/detectors/much/    @v.singhal
+/macro/analysis/much/    @v.singhal
+
+# TOF
+/analysis/detectors/tof/ @n.herrmann @i.deppner
+/core/data/tof/          @n.herrmann @i.deppner
+/core/data/test/tof/     @n.herrmann @i.deppner
+/core/detectors/tof/     @n.herrmann @i.deppner
+/fles/star2019/          @n.herrmann @i.deppner
+/macro/tof/              @n.herrmann @i.deppner
+/sim/detectors/tof/      @n.herrmann @i.deppner
+/reco/detectors/tof/     @n.herrmann @i.deppner
+/MQ/eTOF/                @n.herrmann @i.deppner
+/MQ/hitbuilder/          @n.herrmann @i.deppner
+/algo/detectors/tof/     @n.herrmann @i.deppner
+
+# RICH
+/core/data/rich/      @ma.beyer
+/core/data/test/rich/ @ma.beyer
+/core/detectors/rich/ @ma.beyer
+/macro/rich/          @ma.beyer
+/sim/detectors/rich/  @ma.beyer
+/reco/detectors/rich/ @ma.beyer
+/algo/detectors/rich/ @ma.beyer
+
+# STS
+/analysis/detectors/sts/ @v.friese
+/core/data/sts/          @v.friese
+/core/data/test/sts/     @v.friese
+/core/detectors/sts/     @v.friese
+/macro/sts/              @v.friese
+/sim/detectors/sts/      @v.friese
+/reco/detectors/sts/     @v.friese
+/MQ/sts/                 @v.friese
+/algo/detectors/sts/     @v.friese
+/algo/data/sts/          @v.friese
+
+# MVD
+/reco/detectors/mvd/     @c.muentz @m.deveaux @j.stroth
+/core/detectors/mvd/     @c.muentz @m.deveaux @j.stroth
+/core/data/mvd/          @c.muentz @m.deveaux @j.stroth
+/analysis/detectors/mvd/ @c.muentz @m.deveaux @j.stroth
+/macro/mvd/              @c.muentz @m.deveaux @j.stroth
+/sim/detectors/mvd/      @c.muentz @m.deveaux @j.stroth

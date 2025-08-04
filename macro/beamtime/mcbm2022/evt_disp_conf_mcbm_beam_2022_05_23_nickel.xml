@@ -1,0 +1,77 @@
+<xmlconf>
+<!--
+- color is handled by the FairEventManager, converted from text to ROOT colors, ignored if "", recursive value is depth
+- transparency is handled by the FairEventManager, should be between 1 and 99, ignored if "", recursive value is depth
+  (0 and 100 theoritically, see https://root-forum.cern.ch/t/make-a-geometry-transparent/47665/9)
+- Visibility is boolean and applied to all daughters if recursive set >0
+  => To disable a full detector apart from a few leaves,
+     1) set the top node to "visibility = 0, recursive = 1"
+     2) set each intermediate node to "visibility = 0, recursive = 1"
+     3) set the nodes that should be visible to "visibility = 1, recursive = 1"
+-->
+<Detectors>
+    <detector name="cave_1" color="" transparency="" visibility="" recursive="0">
+        <detector name="pipe_v19f_0" color="" transparency="95" visibility="" recursive="1"></detector>
+        <detector name="sts_v22f_mcbm_0" color="" transparency="" visibility="0" recursive="1">
+            <detector name="Station01_1" color="5" transparency="80" visibility="1" recursive="1"></detector>
+            <detector name="Station02_2" color="5" transparency="80" visibility="1" recursive="1"></detector>
+            <detector name="Plate01_1" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate02_2" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate03_3" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate04_4" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate05_5" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate06_6" color="" transparency="99" visibility="0" recursive="1"></detector>
+            <detector name="Plate07_7" color="" transparency="99" visibility="0" recursive="1"></detector>
+        </detector>
+        <detector name="trd_v22h_mcbm_0" color="" transparency="" visibility="0" recursive="1">
+            <detector name="layer01_20101" color="" transparency="" visibility="0" recursive="1">
+                <detector name="module9_101001001" color="" transparency="" visibility="0" recursive="1">
+                    <detector name="PadPlane_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                </detector>
+            </detector>
+            <detector name="layer02_10202" color="" transparency="" visibility="0" recursive="1">
+                <detector name="module8_101002001" color="" transparency="" visibility="0" recursive="1">
+                    <detector name="padcopper_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                    <detector name="padplane_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                </detector>
+            </detector>
+            <detector name="layer03_11303" color="" transparency="" visibility="0" recursive="1">
+                <detector name="module8_101303001" color="" transparency="" visibility="0" recursive="1">
+                    <detector name="padcopper_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                    <detector name="padplane_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                </detector>
+            </detector>
+        </detector>
+        <detector name="tof_v21k_mcbm_0" color="" transparency="" visibility="0" recursive="1">
+			<detector name="tof_v21k_mcbmStand_1" color="" transparency="" visibility="0" recursive="1">
+				<detector name="module_0_0" color="" transparency="" visibility="0" recursive="1">
+				   <detector name="gas_box_0" color="" transparency="" visibility="0" recursive="1">
+					   <detector name="counter_0" color="" transparency="" visibility="0" recursive="1">
+                           <detector name="tof_glass_4" color="" transparency="80" visibility="1" recursive="1">
+                           </detector>
+                       </detector>
+                   </detector>
+			    </detector>
+				<detector name="module_2_0" color="" transparency="" visibility="0" recursive="1">
+				   <detector name="gas_box_0" color="" transparency="" visibility="0" recursive="1">
+					   <detector name="counter_0" color="" transparency="" visibility="0" recursive="1">
+                           <detector name="tof_glass_4" color="" transparency="80" visibility="1" recursive="1">
+                           </detector>
+                       </detector>
+                   </detector>
+			   </detector>
+            </detector>
+        </detector>
+        <detector name="rich_v21c_mcbm_0" color="" transparency="" visibility="0" recursive="1">
+            <detector name="box_1" color="" transparency="" visibility="0" recursive="1">
+                <detector name="Gas_1" color="" transparency="" visibility="0" recursive="1">
+                    <detector name="pmt_plane_1" color="" transparency="80" visibility="1" recursive="1"></detector>
+                </detector>
+            </detector>
+        </detector>
+        <detector name="much_v22k_mcbm_0" color="" transparency="" visibility="0" recursive="1">
+        </detector>
+        <detector name="platform_v20a_mcbm_0" color="" transparency="" visibility="0" recursive="1"></detector>
+    </detector>
+</Detectors>
+</xmlconf>

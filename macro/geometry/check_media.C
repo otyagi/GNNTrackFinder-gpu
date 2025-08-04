@@ -1,0 +1,188 @@
+/* Copyright (C) 2020 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+   SPDX-License-Identifier: GPL-3.0-only
+   Authors: Florian Uhlig [committer] */
+
+// The macro compares the media for defined TGeoNodes in the mcbm setup with
+// the media assigned to the nodes during creation of the feometries of the
+// different detector systems.
+// Due to the way we build up the complete CBM geometry from the
+// several independent geometries of the detector systems it can happen that
+// a node gets a wrong media information.
+
+// Forward declaration
+std::pair<int, int> loop_over_nodes(const std::vector<std::pair<TString, TString>>&, TString&, TString&,
+                                    TString mvdPrefix = "");
+std::pair<int, int> CheckGeometry(TString, TString mvdPrefix = "");
+std::pair<int, int> CheckMvd(TGeoNode* pipeNode, TString pipeName);
+
+void check_media(const char* dataset = "test")
+{
+  TString geoFile = TString(dataset) + ".geo.root";
+  TFile* f        = new TFile(geoFile);
+  if (!f->IsOpen()) {
+    std::cout << "check_media_1: geometry file " << geoFile << " with the ROOT TGeoManager is not accessible!"
+              << std::endl;
+    return;
+  }
+
+  gGeoManager = dynamic_cast<TGeoManager*>(f->Get("FAIRGeom"));
+  assert(gGeoManager);
+
+
+  int wrong_media {0};
+  int missing_file {0};
+  TGeoNode* topNode = gGeoManager->GetTopNode();
+  TObjArray* nodes  = topNode->GetNodes();
+  for (Int_t iNode = 0; iNode < nodes->GetEntriesFast(); iNode++) {
+    TGeoNode* node   = static_cast<TGeoNode*>(nodes->At(iNode));
+    TString nodename = node->GetName();
+    if (nodename.Contains("target")) continue;
+    std::cout << std::endl;
+    std::cout << "Checking node " << nodename << std::endl;
+    std::pair<int, int> retval = CheckGeometry(nodename);
+    if (-1 == retval.second) {
+      ++missing_file;
+      continue;
+    }
+    wrong_media += retval.second;
+    std::cout << "Checked " << retval.first << " sub nodes from " << nodename << " and found " << retval.second
+              << " with wrongly assigned media" << std::endl;
+
+    // Special handling of MVD which is attached inside the vaccuum of one of the beampipes
+    if (nodename.Contains("pipe")) {
+      std::pair<int, int> retval = CheckMvd(node, nodename);
+      if (-1 == retval.second) {
+        ++missing_file;
+        continue;
+      }
+      wrong_media += retval.second;
+    }
+  }
+
+  if (0 == wrong_media && 0 == missing_file) {
+    std::cout << std::endl;
+    std::cout << "Test passed" << std::endl;
+    std::cout << "All ok" << std::endl;
+  }
+  else {
+    std::cout << std::endl;
+    std::cout << "Test failed" << std::endl;
+    std::cout << "In total " << missing_file << " files were missing" << std::endl;
+    std::cout << "Found in total " << wrong_media << " nodes with wrongly assigned media" << std::endl;
+  }
+  RemoveGeoManager();
+}
+
+std::pair<int, int> CheckGeometry(TString geoname, TString mvdPrefix)
+{
+  // All TOF geometries v16c have the equal internal structure,
+  // only the position in the cave is different so we use the
+  // same input file with the media at creation
+  TString srcDir = gSystem->Getenv("VMCWORKDIR");
+  TString filename {geoname};
+  TString substitution {geoname};
+  TString toReplace {};
+  if (geoname.Contains("tof_v16c")) {
+    filename.Remove(filename.Length() - 5, 5);
+    substitution.Remove(substitution.Length() - 2, 2);
+    filename  = srcDir + "/input/geometry_check/" + filename + "_1h_geometrycheck.root";
+    toReplace = "tof_v16c_1h";
+  }
+  else if (geoname.Contains("trd_v17n")) {
+    filename.Remove(filename.Length() - 5, 5);
+    substitution.Remove(substitution.Length() - 2, 2);
+    filename  = srcDir + "/input/geometry_check/" + filename + "_1e_geometrycheck.root";
+    toReplace = "trd_v17n_1e";
+  }
+  else {
+    filename.Remove(filename.Length() - 2, 2);
+    filename     = srcDir + "/input/geometry_check/" + filename + "_geometrycheck.root";
+    substitution = "";
+    toReplace    = "";
+  }
+
+  TFile* infile = TFile::Open(filename);
+
+  if (nullptr == infile) {
+    std::cout << "Could not open input file " << filename << std::endl;
+    return std::make_pair(-1, -1);
+  }
+  CbmMediaList* matlistPtr {nullptr};
+  infile->GetObject("CbmMediaList", matlistPtr);
+  const std::vector<std::pair<TString, TString>>& matlist = matlistPtr->GetVector();
+
+  std::pair<int, int> retval = loop_over_nodes(matlist, substitution, toReplace, mvdPrefix);
+
+  infile->Close();
+
+  return retval;
+}
+
+std::pair<int, int> loop_over_nodes(const std::vector<std::pair<TString, TString>>& matlist, TString& substitution,
+                                    TString& toReplace, TString mvdPrefix)
+{
+  int media_checked {0};
+  int wrong_media {0};
+  TGeoNode* node {nullptr};
+  TString medName {""};
+  TString nodename {""};
+  for (auto material : matlist) {
+    media_checked++;
+    nodename = mvdPrefix + material.first;
+    if (toReplace.Length() > 0) { nodename = material.first.ReplaceAll(toReplace, substitution); }
+    if (gGeoManager->cd(nodename)) {
+      node    = gGeoManager->GetCurrentNode();
+      medName = node->GetMedium()->GetName();
+      if (medName.CompareTo(material.second)) {
+        wrong_media++;
+        std::cout << "Medium for " << material.first << " is wrong." << std::endl;
+        std::cout << "Expected: " << material.second << std::endl;
+        std::cout << "Found   : " << medName << std::endl;
+        std::cout << std::endl;
+        //      } else {
+        //       std::cout << "Medium for " << material.first << " is correct." << std::endl;
+        //       std::cout << std::endl;
+      }
+    }
+  }
+  return std::make_pair(media_checked, wrong_media);
+}
+
+std::pair<int, int> CheckMvd(TGeoNode* pipeNode, TString pipeName)
+{
+  int media_checked {0};
+  int wrong_media {0};
+
+  TObjArray* nodes = pipeNode->GetNodes();
+  for (Int_t iNode = 0; iNode < nodes->GetEntriesFast(); iNode++) {
+    TGeoNode* node   = static_cast<TGeoNode*>(nodes->At(iNode));
+    TString nodename = node->GetName();
+    if (nodename.Contains("pipevac1")) {
+      TObjArray* subnodes = node->GetNodes();
+      Int_t iNbSubNodes   = (subnodes ? subnodes->GetEntriesFast() : 0);
+      for (Int_t iSubNode = 0; iSubNode < iNbSubNodes; ++iSubNode) {
+        TGeoNode* subnode   = static_cast<TGeoNode*>(subnodes->At(iSubNode));
+        TString subnodename = subnode->GetName();
+        if (subnodename.Contains("MVD") || subnodename.Contains("Mvd") || subnodename.Contains("mvd")) {
+          TString sMvdNodePath = pipeName + "/" + nodename + "/" + subnodename;
+          std::cout << std::endl;
+          std::cout << "MVD geometry found under node " << sMvdNodePath << std::endl;
+          std::cout << "Checking node " << subnodename << std::endl;
+          std::cout << "Not handled/checked properly for now as no way to extract version tag" << std::endl;
+
+          /// TODO: find a way to load/detect the MDV geometry tag, maybe from setup file?
+          std::cout << "Checking node " << subnodename << std::endl;
+          TString sMvdMother = gGeoManager->GetTopNode()->GetName();
+          sMvdMother += "/" + pipeName + "/" + nodename + "/";
+          std::pair<int, int> retval = CheckGeometry(subnodename, sMvdMother);
+          media_checked += retval.first;
+          wrong_media += retval.second;
+
+          std::cout << "Checked " << media_checked << " sub-nodes from " << sMvdNodePath << " and found " << wrong_media
+                    << " with wrongly assigned media" << std::endl;
+        }
+      }
+    }
+  }
+  return std::make_pair(media_checked, wrong_media);
+}

@@ -1,0 +1,13 @@
+FROM gcr.io/kaniko-project/executor:v1.16.0-debug
+    ARG USERNAME="username"
+    ARG PASSWORD="your_password"
+    ARG REGISTRY="hub.cbm.gsi.de"
+    ARG IMAGE="${REGISTRY}/computing/cbmroot/cbm_online"
+    ARG TAG="${USER}-debug"
+    RUN mkdir -p /kaniko/.docker
+    RUN echo "{\"auths\":{\"${REGISTRY}\":{\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\"}}}" > /kaniko/.docker/config.json
+    # TODO: Mount CbmRoot source instead of copying it into the container (-> same with authentification...)
+    COPY . /workspace
+    ENV IMAGE=${IMAGE}
+    ENV TAG=${TAG}
+    ENTRYPOINT ["/bin/sh" , "-xc", "/kaniko/executor --context dir:///workspace --dockerfile /workspace/algo/containers/cbm_online/Dockerfile --destination $IMAGE:$TAG"]

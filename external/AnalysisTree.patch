@@ -1,0 +1,79 @@
+diff --git a/core/CMakeLists.txt b/core/CMakeLists.txt
+index 789179c..6d4d73c 100644
+--- a/core/CMakeLists.txt
++++ b/core/CMakeLists.txt
+@@ -16,7 +16,28 @@ string(REPLACE ".cpp" ".hpp" HEADERS "${SOURCES}")
+ list(APPEND HEADERS "Constants.hpp" "Detector.hpp")
+ 
+ add_library(AnalysisTreeBase SHARED ${SOURCES} G__AnalysisTreeBase.cxx)
+-ROOT_GENERATE_DICTIONARY(G__AnalysisTreeBase ${HEADERS} LINKDEF AnalysisTreeCoreLinkDef.h)
++
++if(${ROOT_VERSION} VERSION_GREATER 6.18.0)
++  message(STATUS "ROOT ${ROOT_VERSION}, use the standard ROOT_GENERATE_DICTIONARY macro.")
++  ROOT_GENERATE_DICTIONARY(G__AnalysisTreeBase ${HEADERS} LINKDEF AnalysisTreeCoreLinkDef.h)
++else()
++  message(STATUS "ROOT ${ROOT_VERSION} has a broken ROOT_GENERATE_DICTIONARY macro, so build the dictionary ourself.")
++  set(dictionary_includes ${HEADERS})
++  set(dictionary_linkdef "AnalysisTreeCoreLinkDef.h")
++  set(dictionary_source "G__AnalysisTreeBase.cxx")
++
++  add_custom_command(OUTPUT ${dictionary_source}
++                     COMMAND ${ROOT_rootcling_CMD} -f ${dictionary_source}
++                     -rml libAnalysisTreeBase
++                     -rmf libAnalysisTreeBase.rootmap
++                     -s   libAnalysisTreeBase
++                     -inlineInputHeader
++                     -I${CMAKE_CURRENT_SOURCE_DIR} ${dictionary_includes}
++                     ${CMAKE_CURRENT_SOURCE_DIR}/${dictionary_linkdef}
++                     DEPENDS ${dictionary_includes} ${dictionary_linkdef}
++                    )
++endif()
++
+ target_link_libraries(AnalysisTreeBase ${ROOT_LIBRARIES} EG)
+ 
+ add_custom_target(AnalysisTreeBaseCopyHeaders ALL
+diff --git a/infra/CMakeLists.txt b/infra/CMakeLists.txt
+index af1d392..97dcb15 100644
+--- a/infra/CMakeLists.txt
++++ b/infra/CMakeLists.txt
+@@ -26,12 +26,34 @@ add_library(AnalysisTreeInfra SHARED ${SOURCES} G__AnalysisTreeInfra.cxx)
+ target_compile_definitions(AnalysisTreeInfra PUBLIC
+         $<$<BOOL:${Boost_FOUND}>:ANALYSISTREE_BOOST_FOUND>)
+ 
+-ROOT_GENERATE_DICTIONARY(G__AnalysisTreeInfra ${HEADERS}
+-        LINKDEF AnalysisTreeInfraLinkDef.h
+-        OPTIONS
+-            -I${CMAKE_BINARY_DIR}/include
+-            $<$<BOOL:${Boost_FOUND}>:-DANALYSISTREE_BOOST_FOUND>
+-        )
++if(${ROOT_VERSION} VERSION_GREATER 6.18.0)
++  message(STATUS "ROOT ${ROOT_VERSION}, use the standard ROOT_GENERATE_DICTIONARY macro.")
++  ROOT_GENERATE_DICTIONARY(G__AnalysisTreeInfra ${HEADERS}
++          LINKDEF AnalysisTreeInfraLinkDef.h
++          OPTIONS
++              -I${CMAKE_BINARY_DIR}/include
++              $<$<BOOL:${Boost_FOUND}>:-DANALYSISTREE_BOOST_FOUND>
++          )
++else()
++  message(STATUS "ROOT ${ROOT_VERSION} has a broken ROOT_GENERATE_DICTIONARY macro, so build the dictionary ourself.")
++  set(dictionary_includes ${HEADERS})
++  set(dictionary_linkdef "AnalysisTreeInfraLinkDef.h")
++  set(dictionary_source "G__AnalysisTreeInfra.cxx")
++
++  add_custom_command(OUTPUT ${dictionary_source}
++                     COMMAND ${ROOT_rootcling_CMD} -f ${dictionary_source}
++                     -rml libAnalysisTreeInfra
++                     -rmf libAnalysisTreeInfra.rootmap
++                     -s   libAnalysisTreeInfra
++                     -inlineInputHeader
++                     -I${CMAKE_CURRENT_SOURCE_DIR} ${dictionary_includes}
++                     -I${CMAKE_BINARY_DIR}/include
++                     -I${CMAKE_BINARY_DIR}/include/AnalysisTree
++                     $<$<BOOL:${Boost_FOUND}>:-DANALYSISTREE_BOOST_FOUND>
++                     ${CMAKE_CURRENT_SOURCE_DIR}/${dictionary_linkdef}
++                     DEPENDS ${dictionary_includes} ${dictionary_linkdef}
++                    )
++endif()
+ target_link_libraries(AnalysisTreeInfra
+         PUBLIC
+             AnalysisTreeBase

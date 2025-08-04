@@ -1,0 +1,14 @@
+global:
+  log_level: INFO
+  log_verbose: LOW
+  log_color: true
+  mode: timeslice
+  nTimeslices: -1
+  firstTimeslice: 0
+  timeslicelength: 1.e5
+  collisionSystem: "Au+Au"
+  beamMomentum: 12.
+  trackMatching: true
+fsdhits:
+  gtrackmatch_minChi2: -1
+  gtrackmatch_maxChi2: 10000

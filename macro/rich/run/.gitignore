@@ -1,0 +1,11 @@
+*.root
+*.dat
+all_*.par
+core_dump_*
+*.log
+*.txt
+*.eps
+*.pdf
+*.png
+*.svg
+*.gif

@@ -1,0 +1,13 @@
+diff --git a/KFParticle/KFPSimdAllocator.h b/KFParticle/KFPSimdAllocator.h
+index 20a13c4..704423f 100644
+--- a/KFParticle/KFPSimdAllocator.h
++++ b/KFParticle/KFPSimdAllocator.h
+@@ -24,6 +24,8 @@
+ 
+ #include <Vc/Vc>
+ 
++#include <mm_malloc.h>
++
+ /** @class KFPSimdAllocator
+  ** @brief Allocator which is needed to allocate memory in std::vector aligned by the size of SIMD vectors.
+  ** @author  M.Zyzak, I.Kisel

@@ -1,0 +1,110 @@
+set(HAL_VERSION 9da3fa0b6511765b83409a1804753e4b46ab81a7)
+
+set(HAL_SRC_URL "https://github.com/DanielWielanek/HAL.git")
+set(HAL_DESTDIR "${CMAKE_BINARY_DIR}/external/HAL-prefix")
+
+
+list(APPEND HAL_LIB_LIST "HalAna" "HalCut" "HalData" "HalFeatures" "HalFemto")
+list(APPEND HAL_LIB_LIST "HalFlow" "HalFluct" "HalSpectra" "HalFair" "HalQA")
+
+download_project_if_needed(PROJECT         Hal_source
+                           GIT_REPOSITORY  ${HAL_SRC_URL}
+                           GIT_TAG         ${HAL_VERSION}
+                           SOURCE_DIR      ${CMAKE_CURRENT_SOURCE_DIR}/Hal
+                           PATCH_COMMAND   "patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/Hal.patch"
+                          )
+
+If(ProjectUpdated)
+  File(REMOVE_RECURSE ${HAL_DESTDIR})
+  Message("Hal source directory was changed so build directory was deleted")
+EndIf()
+
+If(USE_DIFFERENT_COMPILER)
+  Set(EXTRA_ARGS "-DUSE_DIFFERENT_COMPILER=TRUE")
+Else()
+  Set(EXTRA_ARGS "")
+EndIf()
+execute_process(COMMAND gsl-config --prefix OUTPUT_VARIABLE GSLPATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+message(WARNING "GSL PATH ${GSLPATH}")
+
+ExternalProject_Add(HAL
+  BUILD_IN_SOURCE 0
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Hal
+  BUILD_BYPRODUCTS ${HAL_LIBRARY}
+  LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+  CMAKE_ARGS -G ${CMAKE_GENERATOR}
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+        -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+        -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}
+        -DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}
+        -DROOTSYS=${SIMPATH}
+        -DSIMPATH=${SIMPATH}
+        -DFAIRROOTPATH=${FAIRROOTPATH}
+        -DGSL_DIR=${GSLPATH}
+        -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        "${EXTRA_ARGS}"
+  INSTALL_COMMAND  ${CMAKE_COMMAND} --build . --target install
+)
+
+foreach(HAL_LIB_LOCAL ${HAL_LIB_LIST})
+    add_library(${HAL_LIB_LOCAL} SHARED IMPORTED GLOBAL)
+    set_target_properties(${HAL_LIB_LOCAL} PROPERTIES
+      IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${HAL_LIB_LOCAL}${CMAKE_SHARED_LIBRARY_SUFFIX}
+      INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
+    add_dependencies(${HAL_LIB_LOCAL} HAL)
+endforeach()
+
+
+
+#set(Hal_LIBRARIES HalFeatures PARENT_SCOPE)
+#set(Hal_LIB_DIR ${CMAKE_BINARY_DIR}/lib PARENT_SCOPE)
+set(Hal_INCLUDE_DIR "${CMAKE_BINARY_DIR}/include" PARENT_SCOPE)
+set(Hal_FOUND TRUE PARENT_SCOPE)
+
+
+foreach(LIB_NAME ${HAL_LIB_LIST})
+  if(APPLE)
+    Install( FILES
+    "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}.0${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}.1${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    "${CMAKE_BINARY_DIR}/lib/G__${LIB_NAME}Dict_rdict.pcm"
+    "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}.rootmap"
+  DESTINATION lib)
+  else()
+    Install( FILES
+      "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}"
+      "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}.0"
+      "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}.1"
+      "${CMAKE_BINARY_DIR}/lib/G__${LIB_NAME}Dict_rdict.pcm"
+      "${CMAKE_BINARY_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}.rootmap"
+    DESTINATION lib)
+  endif()
+endforeach(LIB_NAME)
+
+## addditional stuff
+Install(FILES ${CMAKE_BINARY_DIR}/bin/hal-report
+	          ${CMAKE_BINARY_DIR}/bin/hal-merger
+	          ${CMAKE_BINARY_DIR}/bin/hal-jobs
+	          ${CMAKE_BINARY_DIR}/bin/hal-corrfit
+	          PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+        DESTINATION bin
+)
+
+Install(DIRECTORY
+		${CMAKE_CURRENT_SOURCE_DIR}/Hal/features/hal_plus
+        DESTINATION share
+)
+Install(DIRECTORY
+        ${CMAKE_BINARY_DIR}/include/Hal
+        DESTINATION include
+)
+
+
+
+

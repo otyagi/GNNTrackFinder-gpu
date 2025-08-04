@@ -1,0 +1,36 @@
+####################################################################################################
+[CbmMcbm2018TofPar]
+//----------------------------------------------------------------------------
+McbmTof2024: Int_t 1
+NrOfGdpbs: Int_t 19
+GdpbIdArray: Int_t \
+0xabc0 0xabc1 0xabc2 0xabc3 0xabc4 0xabc5 0xabc6 0xabc7 0xabc8 0xabc9 0xabca 0xabcb 0xabd0 0xabd1 0xbbc0 0xabcc 0xabcd 0xabce 0xabcf
+NrOfFeesPerGdpb: Int_t 5
+NrOfGet4PerFee:  Int_t 8
+NrOfChannelsPerGet4: Int_t 4
+NrOfGbtx: Int_t   19
+NrOfModule: Int_t 3
+// NrOfRpc used as RpcId
+NrOfRpc: Int_t \
+ 5   5  5  5  5  5  5  5  5  5  5  5  2  2  2  5  5  5  5
+RpcType: Int_t \
+ 0   0  0  0  0  0  0  0  0  0  2  2  9  9  6  2  2  0  0
+RpcSide: Int_t \
+  0  1  0  1  0  1  0  1  0  1  0  1  0  0  4  2  3  2  3
+ModuleId: Int_t \
+  0  0  1  1  2  2  3  3  4  4  0  0  0  1  0  1  1  5  5
+NbMsTot: Int_t 100
+NbMsOverlap: Int_t 1
+SizeMsInNs: Double_t 102400.0
+//SizeMsInNs: Double_t 1638400
+StarTriggerDeadtime:  Double_t \
+ 1000.0  1000.0  1000.0  1000.0  1000.0
+StarTriggerDelay: Double_t \
+ 2000.0  2000.0  2000.0  2000.0  2000.0
+//  2000.0  2000.0  2000.0  2000.0  2000.0
+//-23000.0  -23000.0  -23000.0  -23000.0  -23000.0
+StarTriggerWinSize: Double_t \
+ 2000.0  2000.0  2000.0  2000.0  2000.0
+TsDeadtimePeriod: Double_t 62.5
+
+####################################################################################################

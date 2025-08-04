@@ -1,0 +1,11 @@
+---
+user_slices:
+  - { ref_z: 10, min_z:  0, max_z: 20, max_xy: 100, name: "test_0" }
+  - { ref_z: 30, min_z: 20, max_z: 40, max_xy: 100, name: "test_1" }
+pitch: 0.05
+max_nof_bins: 100
+nof_rays: 3
+parallel_rays: true
+tracking_stations: true
+safe_material_init: false
+...

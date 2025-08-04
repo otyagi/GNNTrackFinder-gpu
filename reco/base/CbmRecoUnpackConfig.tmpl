@@ -1,0 +1,388 @@
+/* Copyright (C) 2010 - 2021 Goethe-University Frankfurt
+   SPDX-License-Identifier: GPL-3.0-only
+   Authors: Pascal Raisig */
+
+/**
+ * @file CbmRecoUnpackConfig.tmpl
+ * @author Pascal Raisig (praisig@ikf.uni-frankfurt.de)
+ * @brief Configuration class for an unpacker algorithm
+ * @version 0.1
+ * @date 2021-04-21
+ *
+ * @copyright Copyright (c) 2021
+ *
+ * This is the common steering task to run unpacking processes in a FairRun for the
+ * CBM detectors.
+ *
+*/
+
+#ifndef CbmRecoUnpackConfig_tmpl
+#define CbmRecoUnpackConfig_tmpl
+
+#include "CbmRecoUnpackAlgo.tmpl"
+
+//#include <FairParAsciiFileIo.h>
+#include <FairRootManager.h>
+#include <Logger.h>
+
+#include <Rtypes.h>
+#include <RtypesCore.h>
+
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+template<typename TAlgo, typename TOutput, typename TOptOutA = std::nullptr_t, typename TOptOutB = std::nullptr_t>
+class CbmRecoUnpackConfig {
+
+public:
+  /**
+   * @brief Create a Cbm Reco Unpack Config object
+  */
+  CbmRecoUnpackConfig(std::string name, std::string detGeoSetupTag, UInt_t runid) :
+    fName(name)
+    , fGeoSetupTag(detGeoSetupTag)
+    , fRunId(runid) {};
+
+  /**
+   * @brief Destroy the Cbm Trd Unpack Task object
+   *
+  */
+  virtual ~CbmRecoUnpackConfig() {};
+
+  /** @brief Copy constructor - not implemented **/
+  CbmRecoUnpackConfig(const CbmRecoUnpackConfig&) = delete;
+
+  /** @brief Assignment operator - not implemented **/
+  CbmRecoUnpackConfig& operator=(const CbmRecoUnpackConfig&) = delete;
+
+protected:
+  // Output vectors
+  /** @brief Pointer to the output vectors connected to the framework. */
+  std::vector<TOutput>* fOutputVec = nullptr;
+
+  /** @brief Name for the branch of the output, set if a non-default name is to be used. */
+  std::string fOutputBranchName = "";
+
+  /** @brief Pointer to the opt output vectors connected to the framework. */
+  std::vector<TOptOutA>* fOptOutAVec = nullptr;
+
+  /** @brief Name for the branch of the output, set together with the write output flag. */
+  std::string fOptoutABranchName = "";
+
+  /** @brief Pointer to the opt output vectors connected to the framework. */
+  std::vector<TOptOutB>* fOptOutBVec = nullptr;
+
+  /** @brief Name for the branch of the output, set together with the write output flag. */
+  std::string fOptoutBBranchName = "";
+
+  /** @brief Pointer to the algorithm to be used for data connected to this config */
+  std::shared_ptr<TAlgo> fAlgo = nullptr;
+
+  // Runtime parameters
+  std::string fParFilesBasePath = "";
+
+  /** @brief Name of the (derived) class for debugging statements */
+  std::string fName = "";
+
+  /** @brief Geometry setup tag for the given detector as used by CbmSetup objects */
+  std::string fGeoSetupTag = "";
+
+  /** @brief RunId of the current run, if not known 0 is a valid runtime case. Used runId based parameter loading. */
+  UInt_t fRunId = 0;
+
+  /** @brief Do debug printouts. Call SetDebugState() to activate*/
+  bool fDoLog = false;
+
+  /** @brief Decision if the output is supposed to be stored to a branch. */
+  bool fDoWriteOutput = false;
+
+  /** @brief Decision if the opt output A is supposed to be stored to a branch. */
+  bool fDoWriteOptOutA = false;
+
+  /** @brief Decision if the opt output B is supposed to be stored to a branch. */
+  bool fDoWriteOptOutB = false;
+
+  /** @brief Decision if the info msgs are supposed to be stored to a branch. */
+  bool fIsMC = false;
+
+  /**
+   * @brief Time offset for the system
+   * @todo This should be module and channel dependent and included into the asic parameters
+  */
+  int32_t fSystemTimeOffset = 0;
+
+  /** @brief Flag to control whether the unpacker algo ignores the overlapp microslices (if true).*/
+  bool fDoIgnoreOverlappMs = true;
+
+  /** @brief Use this function to implement additional actions to be called once per TS, e.g. needed if more than the default output vector is used. */
+  virtual void reset() { return; };
+
+
+public:
+  // Getters
+  /**
+   * @brief Get the Output Branch Name
+   *
+   * @return std::string
+  */
+  std::string GetOutputBranchName() { return fOutputBranchName.empty() ? TOutput::GetBranchName() : fOutputBranchName; }
+
+  /**
+   * @brief Get the Output Branch Name
+   *
+   * @return std::string
+  */
+  std::string GetOutputBranchNameOptA() { return fOptoutABranchName; }
+
+  /**
+   * @brief Get the Output Branch Name
+   *
+   * @return std::string
+  */
+  std::string GetOutputBranchNameOptB() { return fOptoutBBranchName; }
+
+  /** @brief Get the name of the given derived config */
+  std::string GetName() { return fName; }
+
+  /**
+   * @brief Get a given output vector connected to the tree, if called after calling InitUnpacker().
+   *
+   * @return std::vector<TOutput>*
+  */
+  std::vector<TOutput>* GetOutputVec() { return fOutputVec; }
+
+  /**
+   * @brief Get a given output vector connected to the tree, if called after calling InitUnpacker().
+   *
+   * @return std::vector<TOptOutA>*
+  */
+  std::vector<TOptOutA>* GetOptOutAVec() { return fOptOutAVec; }
+
+  /**
+   * @brief Get a given output vector connected to the tree, if called after calling InitUnpacker().
+   *
+   * @return std::vector<TOptOutA>*
+  */
+  std::vector<TOptOutB>* GetOptOutBVec() { return fOptOutBVec; }
+
+  /**
+   * @brief Get the ready to run Unpacker. To be defined in the derived classes.
+   * In this function also all initialization steps of the unpacker algorithms have to happen.
+   * @return std::shared_ptr<CbmRecoUnpackAlgo>
+  */
+  std::shared_ptr<TAlgo> GetUnpacker() { return fAlgo; };
+
+  /**
+   * @brief Get the requested parameter containers from the Algo.
+   * Return the required parameter containers together with the paths to the ascii
+   * files to.
+   * @return fParContVec
+  */
+  virtual std::vector<std::pair<std::string, std::shared_ptr<FairParGenericSet>>>*
+    GetParContainerRequest()
+  {
+    if(fAlgo) return fAlgo->GetParContainerRequest(fGeoSetupTag, fRunId);
+    else return {};
+  }
+
+  /**
+   * @brief Init function of the configs to be called by CbmRecoUnpack()
+   * Initializes the output branches and calls InitUnpacker()
+   * @param ioman Pointer to the FairRootManager instance
+   * @param branchname by default TOutput::GetBranchName() is used for the first output. If branchname is not empty that branchname is used.
+  */
+  void InitOutput()
+  {
+    LOG(info) << fName << "::Init() ---------------------------------";
+
+    if (fDoWriteOutput) {
+      fOutputVec = new std::vector<TOutput>();
+      LOG(info) << fName << "::InitOutput(" << GetOutputBranchName().data() << ")";
+    }
+
+    /** @todo for the optional outputs it is more complicated to check if they exist. Needs exceptions for the std::nullptr_t. Should be added at some point in time. */
+    if (fDoWriteOptOutA) {
+      if (!fOptOutAVec) {
+        fOptOutAVec = new std::vector<TOptOutA>();
+        LOG(info) << fName << "::InitOutput(" << fOptoutABranchName.data() << ")";
+      }
+    }
+
+    if (fDoWriteOptOutB) {
+      fOptOutBVec = new std::vector<TOptOutB>();
+      LOG(info) << fName << "::InitOutput(" << fOptoutBBranchName.data() << ")";
+    }
+  }
+
+  /**
+   * @brief Register the output vectors (if needed) to the FairRoot Manager)
+   * FIXME: To be removed with the Manager include whenever the similar code in the CbmRecoUnpack task work as expected
+   *
+  */
+  void RegisterOutput(FairRootManager* ioman)
+  {
+    if (fDoWriteOutput && fOutputVec) {
+      ioman->RegisterAny(GetOutputBranchName().data(), fOutputVec, kTRUE);
+      LOG(info) << fName << "::registerBranchToTree(" << GetOutputBranchName().data() << ")";
+    }
+
+    /** @todo for the optional outputs it is more complicated to check if they exist. Needs exceptions for the std::nullptr_t. Should be added at some point in time. */
+    if (fDoWriteOptOutA && fOptOutAVec) {
+      ioman->RegisterAny(fOptoutABranchName.data(), fOptOutAVec, kTRUE);
+      LOG(info) << fName << "::registerBranchToTree(" << fOptoutABranchName.data() << ")";
+    }
+
+    if (fDoWriteOptOutB && fOptOutBVec) {
+      ioman->RegisterAny(fOptoutBBranchName.data(), fOptOutBVec, kTRUE);
+      LOG(info) << fName << "::registerBranchToTree(" << fOptoutBBranchName.data() << ")";
+    }
+  }
+
+  /**
+   * @brief Setup the derived unpacker algorithm to be used for the DAQ output to Digi translation.
+   * Can be re-implemented in the derived classes if more than the Algo choice and path setting needs to be done before getting the Parameters
+   *
+  */
+  virtual void SetAlgo()
+  {
+    LOG(info) << fName << "::SetAlgo -";
+
+    // First choose the derived unpacking algorithm to be used
+    // TODO: To avoid having to check if the pointer is assigned nultiples times, an exception
+    // should be thrown in case of failure
+    fAlgo = chooseAlgo();
+
+    if (fDoLog) LOG(info) << fName << "::SetAlgo - SetParFilesBasePath";
+    fAlgo->SetParFilesBasePath(fParFilesBasePath);
+
+    // Set the global system time offset
+    if (fDoLog) LOG(info) << fName << "::SetAlgo - SetSystemTimeOffset";
+    fAlgo->SetSystemTimeOffset(fSystemTimeOffset);
+
+    // Set the flag controlling the overlap ignore
+    if (fDoLog) LOG(info) << fName << "::SetAlgo - SetDoIgnoreOverlappMs";
+    fAlgo->SetDoIgnoreOverlappMs(fDoIgnoreOverlappMs);
+  }
+
+  /**
+   * @brief Initialize the algorithm, should include all steps needing te parameter objects to be present.
+   * To be re-implemented in the derived classes if not all settings in parameter classes.
+   *
+  */
+  virtual void InitAlgo()
+  {
+    // Now we have all information required to initialise the algorithm
+    fAlgo->Init();
+  }
+
+  /** @brief Reset called once per ReadEvent() */
+  void Reset()
+  {
+    // Clear the default vector
+    if (fOutputVec) fOutputVec->clear();
+    if (fOptOutAVec) fOptOutAVec->clear();
+    if (fOptOutBVec) fOptOutBVec->clear();
+    // Use this function if you need to do more things in your derived config.
+    reset();
+  };
+
+  // Setters
+  /**
+   * @brief Set the Do Write Digis flag, without activation the digis are not written to the sink
+   * @param value
+   */
+  void SetDoWriteOutput(bool value = true) { fDoWriteOutput = value; }
+
+  /**
+   * @brief Set the Output Branch Name
+   * By default TOutput::GetBranchName() is used. Set this if you want to use a
+   * different output name
+   * @param value
+  */
+  void SetOutputBranchName(std::string value) { fOutputBranchName = value; }
+
+  /**
+   * @brief Set the Do Write OptOutput A flag, without activation the opt out is not written to the sink
+   * @param branchname name of the branch in the output tree
+   * @param value bool
+   */
+  void SetDoWriteOptOutA(std::string branchname, bool value = true)
+  {
+    fOptoutABranchName = branchname;
+    fDoWriteOptOutA    = value;
+  }
+
+  /**
+   * @brief Set the Do Write OptOutput B flag, without activation the opt out is not written to the sink
+   * @param branchname name of the branch in the output tree
+   * @param value bool
+   */
+  void SetDoWriteOptOutB(std::string branchname, bool value = true)
+  {
+    fOptoutBBranchName = branchname;
+    fDoWriteOptOutB    = value;
+  }
+
+  /**
+   * @brief Set the Debug State, influences the log messages.
+   *
+   * @param value
+  */
+  void SetDebugState(bool value = true) { fDoLog = value; }
+
+  /**
+   * @brief Set the is MC flag. Activates the Match branch.
+   *
+   * @param value
+  */
+  void SetIsMC(bool value = true) { fIsMC = value; }
+
+  /**
+   * @brief Set the Output Vec
+   *
+   * @tparam Output
+   * @param value
+  */
+  void SetOutputVec(std::vector<TOutput>* value) { fOutputVec = value; }
+
+  /**
+   * @brief Set the Par Files Base Path (absolute directory path were the files are stored)
+   *
+   * @param value
+  */
+  void SetParFilesBasePath(std::string value) { fParFilesBasePath = value; }
+
+  /** @brief Set the global system time offset @remark in princible this should go to parameters */
+  void SetSystemTimeOffset(int32_t value) { fSystemTimeOffset = value; }
+
+  /** @brief Get the global system time offset @remark in princible this should go to parameters */
+  int32_t GetSystemTimeOffset() { return fSystemTimeOffset; }
+
+  /** @brief Set the global system time offset and set it directly in the algo if possible @remark in princible this should go to parameters */
+  void SetSystemTimeOffsetAlgo(int32_t value) {
+    fSystemTimeOffset = value;
+    if(nullptr != fAlgo ) {
+      // Try to apply it immediately to the algo
+      fAlgo->SetSystemTimeOffset( value );
+    }
+    else {
+      LOG(warn) << fName << "::SetSystemTimeOffsetAlgo() Algo not available, value saved in case later available";
+    }
+  }
+
+  /** @brief Set the value of the flag to ignore the overlap microslices @remark in princible this should go to parameters */
+  void SetDoIgnoreOverlappMs(bool value = false) { fDoIgnoreOverlappMs = value; }
+
+protected:
+  /**
+   * @brief Choose the derived unpacker algorithm to be used for the DAQ output to Digi translation. If algo was already set manually by the user this algorithm is used.
+   * To be implemented in the derived classes
+   *
+   * @return std::shared_ptr<TAlgo>
+  */
+  virtual std::shared_ptr<TAlgo> chooseAlgo() = 0;
+};
+
+
+#endif  // CbmRecoUnpackConfig_tmpl

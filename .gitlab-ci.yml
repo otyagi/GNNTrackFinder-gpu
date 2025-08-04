@@ -1,0 +1,635 @@
+stages:
+  - checkRepository
+  - checkFormat
+  - build
+  - package
+  - verify
+  - finalise
+  - documentation
+
+RebaseCheck:
+  stage: checkRepository
+  variables:
+    GIT_DEPTH: 200
+  image: alpine
+  tags:
+    - docker
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    # Check if a rebase is needed
+    # If a rebase is needed stop immediately
+    - apk update && apk add git bash
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - hash1=$(git show-ref upstream/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME | cut -f1 -d' ')
+    - hash2=$(git merge-base upstream/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME HEAD)
+    - echo "${hash1}"
+    - echo "${hash2}"
+    - if [ "${hash1}" = "${hash2}" ]; then
+    -   echo "No rebase required"
+    -   exit 0
+    - else
+    -   echo "The Merge Request is not up-to-date"
+    -   echo "Rebase is required"
+    -   exit 1
+    - fi
+
+LinearHistCheck:
+  stage: checkRepository
+  variables:
+    GIT_DEPTH: 200
+  image: alpine
+  tags:
+    - docker
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    # Check if the history introduced by the MR is linear (no branch loop in fork)
+    # If not linear stop immediately
+    - apk update && apk add git bash
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - count=$(git rev-list --min-parents=2 --count upstream/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..HEAD)
+    - echo "${count}"
+    - if [ 0 = "${count}" ]; then
+    -   echo "History introduced in fork is linear"
+    -   exit 0
+    - else
+    -   echo "History introduced in fork is not linear"
+    -   echo "${count} merge commits must be removed or the other new commits have to be replayed in a new branch"
+    -   exit 1
+    - fi
+
+CodeFormatCheck:
+  stage: checkFormat
+  tags:
+    - CbmRoot_apptainer
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - echo "export FAIRSOFT_VERSION=apr21p2" > env.sh
+    - echo "export FAIRROOT_VERSION=v18.6.7" >> env.sh
+    - echo "export SIMPATH=/cvmfs/fairsoft.gsi.de/debian10/fairsoft/\${FAIRSOFT_VERSION}" >> env.sh
+    - echo "export FAIRROOTPATH=/cvmfs/fairsoft.gsi.de/debian10/fairroot/\${FAIRROOT_VERSION}_fs_\${FAIRSOFT_VERSION}" >> env.sh
+    - echo "export BUILDDIR=$PWD/build" >> env.sh
+    - echo "export SOURCEDIR=$PWD" >> env.sh
+    - echo "export PATH=/cvmfs/cbm.gsi.de/debian10/clang-format-11.0.0/bin:\$SIMPATH/bin:$PATH" >> env.sh
+    - echo "export LABEL=format-check_MR-\${CI_MERGE_REQUEST_IID}" >> env.sh
+    - echo "export FAIRROOT_FORMAT_BASE=upstream/\${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" >> env.sh
+    - . ./env.sh && ctest -S cmake/scripts/checkformat.cmake -VV
+  variables:
+    CONTAINER: "/cvmfs/vae.gsi.de/debian10/containers/user_container-production.sif"
+    OS: debian10
+#    FAIRSOFT_VERSION: nov22p1
+#    FAIRROOT_VERSION: v18.8.0
+#    BASE_PATH: "/opt"
+#    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+#    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+
+#CodeTidyCheck:
+#  stage: checkFormat
+#  tags:
+#    - CbmRoot_apptainer
+#  only:
+#    refs:
+#      - merge_requests
+#    variables:
+#      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+#  script:
+#    # Get the upstream repository manually. I did not find any other way to have it for
+#    # comparison
+#    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+#    - git fetch upstream
+#    - echo "export FAIRSOFT_VERSION=$FAIRSOFT_VERSION" > env.sh
+#    - echo "export FAIRROOT_VERSION=$FAIRROOT_VERSION" >> env.sh
+#    - echo "export SIMPATH=/opt/fairsoft/\${FAIRSOFT_VERSION}" >> env.sh
+#    - echo "export FAIRROOTPATH=/opt/fairroot/\${FAIRROOT_VERSION}_\${FAIRSOFT_VERSION}" >> env.sh
+#    - echo "export BUILDDIR=$PWD/build" >> env.sh
+#    - echo "export SOURCEDIR=$PWD" >> env.sh
+#    - echo "export PATH=/cvmfs/cbm.gsi.de/clang-format-11.0.0/bin:\$SIMPATH/bin:$PATH" >> env.sh
+#    - echo "export LABEL=tidy-check_MR-${CI_MERGE_REQUEST_IID}" >> env.sh
+#    - echo "export FAIRROOT_TIDY_BASE=upstream/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" >> env.sh
+#    - echo "export NCPU=8"
+#    - . ./env.sh && ctest -S cmake/scripts/checktidy.cmake -VV
+#  after_script:
+#    - rm -rf build
+#  variables:
+#    CONTAINER: "/cvmfs/cbm.gsi.de/containers/debian12_v18.8.0_nov22p1_1.sif"
+#    OS: debian12
+#    FAIRSOFT_VERSION: nov22p1
+#    FAIRROOT_VERSION: v18.8.0
+#    BASE_PATH: "/opt"
+#    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+#    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+
+FileFormatCheck:
+  stage: checkFormat
+  image: alpine
+  tags:
+    - docker
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    - apk update && apk add git bash file
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - scripts/check-file-format.sh upstream
+
+FileEndCheck:
+  stage: checkFormat
+  image: alpine
+  tags:
+    - docker
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    - apk update && apk add git bash file
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - scripts/check-file-ending.sh upstream
+
+
+FileLicenceCheck:
+  stage: checkFormat
+  image: alpine
+  tags:
+    - docker
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^DC_.*$/
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    - apk update && apk add git bash file
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - scripts/check-licence-header.sh upstream
+
+
+#
+# job template
+#
+.build_and_test: &build_and_test
+  timeout: 1h # Possible since Gitlab 15.7, job-level timeout can exceed project timeout but not Runner timeout
+  before_script:
+    - if [ "$CI_MERGE_REQUEST_PROJECT_PATH" != "computing/cbmroot" ]; then
+    -   if [ "$CI_PROJECT_PATH" != "computing/cbmroot" ]; then
+    -     echo "Should not come here"
+    -     env
+    -     exit 1
+    -   fi
+    - fi
+  script:
+    - echo "export LINUX_FLAVOUR=$OS" >> Dart.cfg
+    - echo "export SIMPATH=$SIMPATH" >> Dart.cfg
+    - echo "export FAIRROOTPATH=$FAIRROOTPATH" >> Dart.cfg
+    - if [[ -n $RAW_DATA_PATH ]]; then
+    -   echo "export RAW_DATA_PATH=$RAW_DATA_PATH" >> Dart.cfg
+    - fi
+    - echo "export BUILDDIR=$PWD/build" >> Dart.cfg
+    - echo "export SOURCEDIR=$PWD" >> Dart.cfg
+    - if [[ -n $EXTRA_PATH ]]; then
+    -   echo "export PATH=$EXTRA_PATH:$PATH" >> Dart.cfg
+    - fi
+    - if [[ -n $EXTRA_FLAGS ]]; then
+    -   echo "export EXTRA_FLAGS=$EXTRA_FLAGS" >> Dart.cfg
+    - fi
+    - if [[ -n $INSTALL_PROJECT ]]; then
+    -   echo "export INSTALL_PROJECT=TRUE" >> Dart.cfg
+    - fi
+    - ./scripts/find_cijob_ctest_stop_time.sh Dart.cfg
+    - if [[ -n $CI_TEST_STAGE_TOTAL_TIME_LIMIT ]]; then
+    -   echo "export CI_TEST_STAGE_TOTAL_TIME_LIMIT=$CI_TEST_STAGE_TOTAL_TIME_LIMIT"  >> Dart.cfg
+    - fi
+    - if [[ -n $CONFIGFILE ]]; then
+    -   source $CONFIGFILE $FAIRSOFT_VERSION
+    - fi
+    - $PWD/Dart.sh $BUILD_TYPE Dart.cfg
+  after_script:
+    - rm -rf build
+
+#
+# job element definitions
+#
+.realData_tag: &realData_tag
+  stage: build
+  tags:
+    - CbmRoot_realData
+
+.realData_variables: &realData_variables
+    OS: "Debian12"
+    NCPU: 16
+    RAW_DATA_PATH: "/opt/cbmsoft/beamtime-test-data/reduced/"
+    FAIRSOFT_VERSION: "apr21p2"
+    FAIRROOT_VERSION: "v18.6.7"
+    BASE_PATH: "/opt/"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    CHECK_GEO_HASH_CHANGE: "1"
+    CI_TEST_STAGE_TOTAL_TIME_LIMIT: 1500 # in seconds = 25 minutes
+
+.apptainer_tag: &apptainer_tag
+  stage: build
+  tags:
+    - CbmRoot_apptainer
+
+.apptainer_vae23_variables_apr21: &apptainer_vae23_variables_apr21
+    CONTAINER: "/cvmfs/vae.gsi.de/vae23/containers/user_container-production.sif"
+    OS: vae23
+    FAIRSOFT_VERSION: apr21p2
+    FAIRROOT_VERSION: v18.6.7
+    BASE_PATH: "/cvmfs/fairsoft.gsi.de/debian10/"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_fs_${FAIRSOFT_VERSION}"
+    CONFIGFILE: "/cvmfs/cbm.gsi.de/debian10/bin/setup_development_environment.sh"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.apptainer_vae23_variables_nov22p1: &apptainer_vae23_variables_nov22p1
+    CONTAINER: "/cvmfs/vae.gsi.de/vae23/containers/user_container-production.sif"
+    OS: vae23
+    FAIRSOFT_VERSION: nov22p1
+    FAIRROOT_VERSION: v18.8.0
+    BASE_PATH: "/cvmfs/fairsoft.gsi.de/debian10/"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_fs_${FAIRSOFT_VERSION}"
+    CONFIGFILE: "/cvmfs/cbm.gsi.de/debian10/bin/setup_development_environment.sh"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.apptainer_vae24_variables_nov22p3: &apptainer_vae24_variables_nov22p3
+    CONTAINER: "/cvmfs/vae.gsi.de/vae24/containers/user_container-production.sif"
+    OS: vae24
+    FAIRSOFT_VERSION: nov22p3
+    FAIRROOT_VERSION: v18.8.0
+    BASE_PATH: "/cvmfs/fairsoft.gsi.de/debian11/"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    CONFIGFILE: "/cvmfs/cbm.gsi.de/debian11/bin/setup_development_environment.sh"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.apptainer_vae24_variables_jan24p1: &apptainer_vae24_variables_jan24p1
+    CONTAINER: "/cvmfs/vae.gsi.de/vae24/containers/user_container-production.sif"
+    OS: vae24
+    FAIRSOFT_VERSION: jan24p1
+    FAIRROOT_VERSION: v18.8.2
+    BASE_PATH: "/cvmfs/fairsoft.gsi.de/debian11/"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    CONFIGFILE: "/cvmfs/cbm.gsi.de/debian11/bin/setup_development_environment.sh"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.apptainer_debian11_variables_apr21: &apptainer_debian11_variables_apr21
+    CONTAINER: "/cvmfs/cbm.gsi.de/containers/debian11_v18.6.7_apr21p2_1.sif"
+    OS: debian11
+    FAIRSOFT_VERSION: apr21p2
+    FAIRROOT_VERSION: v18.6.7
+    BASE_PATH: "/opt/"
+    SIMPATH: "$BASE_PATH/fairsoft/${FAIRSOFT_VERSION}"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.apptainer_debian12_variables_nov22p1: &apptainer_debian12_variables_nov22p1
+    CONTAINER: "/cvmfs/cbm.gsi.de/containers/debian12_v18.8.0_nov22p1_2.sif"
+    OS: debian12
+    FAIRSOFT_VERSION: nov22p1
+    FAIRROOT_VERSION: v18.8.0
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    INSTALL_PROJECT: "TRUE"
+    EXTRA_FLAGS: '"-DCBM_TEST_INSTALL=TRUE"'
+
+.linux_tag: &linux_tag
+  stage: build
+  tags:
+    - CbmRoot
+  # Possible since Gitlab 15.7, job-level timeout can exceed project timeout but not Runner timeout
+  timeout: 1h 30m # Continuous tests after merge need more time than the pre-merge CI
+
+.linux_variables: &linux_variables
+    OS: "Debian12"
+    NCPU: 5
+    FAIRSOFT_VERSION: "nov22p1"
+    FAIRROOT_VERSION: "v18.8.0"
+    BASE_PATH: "/cvmfs/fairsoft.gsi.de/debian12"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_fs_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: "${SIMPATH}/bin"
+    CI_TEST_STAGE_TOTAL_TIME_LIMIT: 1800 # in seconds = 30 m, Continuous tests after merge need longer than pre-merge CI
+
+.macosx_tag: &macosx_tag
+  stage: build
+  tags:
+    - qemu_macosx
+
+.macosx_13_variables_nov22p1: &macosx_13_variables_nov22p1
+    OS: "macOS13"
+    FAIRSOFT_VERSION: "nov22p1"
+    FAIRROOT_VERSION: "v18.8.0"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.macosx_12_variables_nov22p1: &macosx_12_variables_nov22p1
+    OS: "macOS12"
+    FAIRSOFT_VERSION: "nov22p1"
+    FAIRROOT_VERSION: "v18.8.0"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.macosx_11_variables_nov22p1: &macosx_11_variables_nov22p1
+    OS: "macOS11"
+    FAIRSOFT_VERSION: "nov22p1"
+    FAIRROOT_VERSION: "v18.8.0"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.macosx_1015_variables: &macosx_1015_variables
+    OS: "macOS1015"
+    FAIRSOFT_VERSION: "apr21p2"
+    FAIRROOT_VERSION: "v18.6.7"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.macosx_12_variables: &macosx_12_variables
+    OS: "macOS12"
+    FAIRSOFT_VERSION: "apr21p2"
+    FAIRROOT_VERSION: "v18.6.7"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.macosx_11_variables: &macosx_11_variables
+    OS: "macOS11"
+    FAIRSOFT_VERSION: "apr21p2"
+    FAIRROOT_VERSION: "v18.6.7"
+    BASE_PATH: "/opt"
+    SIMPATH: "$BASE_PATH/fairsoft/$FAIRSOFT_VERSION"
+    FAIRROOTPATH: "$BASE_PATH/fairroot/${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    IMAGE_NAME: "${OS}_${FAIRROOT_VERSION}_${FAIRSOFT_VERSION}"
+    EXTRA_PATH: /usr/local/bin
+
+.mergeVariables: &mergeVariables
+    BUILD_TYPE: "Continuous"
+
+.mergeRequestVariables: &mergeRequestVariables
+    BUILD_TYPE: "MergeRequest"
+
+.check_merge_request: &check_merge_request
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+
+.check_merge: &check_merge
+  only:
+    refs:
+      - master
+    variables:
+      - $CI_PROJECT_PATH == "computing/cbmroot"
+
+#
+# job matrix for build jobs
+#
+
+CbmRoot_Merge_realData:
+  <<: [*realData_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *realData_variables]
+
+CbmRoot_Merge_Apptainer_debian12_nov22p1:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_debian12_variables_nov22p1]
+
+CbmRoot_Merge_Apptainer_debian11_apr21:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_debian11_variables_apr21]
+
+CbmRoot_Merge_Apptainer_vae23_apr21:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_vae23_variables_apr21]
+
+CbmRoot_Merge_Apptainer_vae23_nov22p1:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_vae23_variables_nov22p1]
+
+CbmRoot_Merge_Apptainer_vae24_nov22p3:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_vae24_variables_nov22p3]
+
+CbmRoot_Merge_Apptainer_vae24_jan24p1:
+  <<: [*apptainer_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *apptainer_vae24_variables_jan24p1]
+
+CbmRoot_Merge_macosx_13_nov22p1:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_13_variables_nov22p1]
+
+CbmRoot_Merge_macosx_12_nov22p1:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_12_variables_nov22p1]
+
+CbmRoot_Merge_macosx_11_nov22p1:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_11_variables_nov22p1]
+
+CbmRoot_Merge_macosx_1015:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_1015_variables]
+
+CbmRoot_Merge_macosx_11:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_11_variables]
+
+CbmRoot_Merge_macosx_12:
+  <<: [*macosx_tag, *check_merge_request, *build_and_test]
+  variables:
+    <<: [*mergeRequestVariables, *macosx_12_variables]
+
+CbmRoot_Continuous:
+  <<: [*linux_tag, *check_merge, *build_and_test]
+  variables:
+    <<: [*mergeVariables, *linux_variables]
+
+BuildOnlineContainerMR:
+  stage: package
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+  needs:
+    - CodeFormatCheck
+    - FileFormatCheck
+    - FileEndCheck
+    - FileLicenceCheck
+  tags:
+    - docker
+  image:
+    name: $CI_REGISTRY/computing/images/base/kaniko/executor:v1.20.1-debug
+    entrypoint: [""]
+  variables:
+    IMAGE_NAME: $CI_REGISTRY_IMAGE/cbm_online
+    IMAGE_TAG: mr$CI_MERGE_REQUEST_IID
+    DOCKERFILE: $CI_PROJECT_DIR/.ci/online/Dockerfile
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context dir://$CI_PROJECT_DIR --dockerfile $DOCKERFILE --destination $IMAGE_NAME:$IMAGE_TAG
+    # Cache settings suggested by Copilot: --cache=true --cache-repo=${IMAGE_NAME} --cache-ttl=168h --cache-shared=true --cache-dir=/cache
+    # TODO: Test if these work
+
+# Ensure the container we just build is usable, and not missing any dependencies
+VerifyOnlineContainerMR:
+  stage: verify
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+  needs:
+    - BuildOnlineContainerMR
+  tags:
+    - docker
+  variables:
+    IMAGE_NAME: $CI_REGISTRY_IMAGE/cbm_online
+    IMAGE_TAG: mr$CI_MERGE_REQUEST_IID
+  image: $IMAGE_NAME:$IMAGE_TAG
+  script:
+    - cbmreco --help
+
+# Create container for master and DC_* branches on merge
+BuildOnlineContainerBranch:
+  stage: package
+  only:
+    - master@computing/cbmroot
+    - nightly_master@computing/cbmroot
+    - /^DC_.*$/@computing/cbmroot
+  needs: [] # Don't wait for continuous build, start immediately
+  tags:
+    - docker
+  image:
+    name: $CI_REGISTRY/computing/images/base/kaniko/executor:v1.20.1-debug
+    entrypoint: [""]
+  variables:
+    IMAGE_NAME: $CI_REGISTRY_IMAGE/cbm_online
+    IMAGE_TAG: $CI_COMMIT_BRANCH
+    DOCKERFILE: $CI_PROJECT_DIR/.ci/online/Dockerfile
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context dir://$CI_PROJECT_DIR --dockerfile $DOCKERFILE --destination $IMAGE_NAME:$IMAGE_TAG
+
+VerifyOnlineContainerBranch:
+  stage: verify
+  only:
+    - master@computing/cbmroot
+    - nightly_master@computing/cbmroot
+    - /^DC_.*$/@computing/cbmroot
+  needs:
+    - BuildOnlineContainerBranch
+  tags:
+    - docker
+  variables:
+    IMAGE_NAME: $CI_REGISTRY_IMAGE/cbm_online
+    IMAGE_TAG: $CI_COMMIT_BRANCH
+  image: $IMAGE_NAME:$IMAGE_TAG
+  script:
+    - cbmreco --help
+
+InformCodeOwners:
+  stage: finalise
+  tags:
+    - Code_Owners
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_PROJECT_PATH == "computing/cbmroot" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+  script:
+    # Get the upstream repository manually. I did not find any other way to have it for
+    # comparison
+    - scripts/connect_upstream_repo.sh $CI_MERGE_REQUEST_PROJECT_URL
+    - git fetch upstream
+    - scripts/inform_codeowners.sh upstream
+
+pages:
+  stage: documentation
+  image: alpine
+  tags:
+    - docker
+  script:
+    - apk update && apk add doxygen graphviz
+    - doxygen doxygen/cbmDoxyfile.conf
+    - mv html-doc/html public/
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - public
+  only:
+    - nightly_master

@@ -1,0 +1,9 @@
+Checks:          '-*,modernize-deprecated-headers'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle:     file
+CheckOptions:
+  - key:             modernize-deprecated-headers.CheckHeaderFile
+    value:           'true'
+...

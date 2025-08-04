@@ -1,0 +1,22 @@
+# exclude top level directories
+# which are taken from other git repositories
+# The / at the beginning is important, otherwise all directories
+# containing the string are ignored
+/geometry
+/input
+/parameters
+/qa_data
+/build
+/algo/external
+
+# Comment some single files
+Dart*.cfg
+
+# gdb Crash dumps
+**/core_dump_*
+
+# Git rebase backoup files
+**/*.orig
+
+# IDEs
+.vscode

@@ -1,0 +1,29 @@
+cmake_host_system_information(RESULT fqdn QUERY FQDN)
+
+Set(CTEST_SOURCE_DIRECTORY $ENV{SOURCEDIR})
+Set(CTEST_BINARY_DIRECTORY $ENV{BUILDDIR})
+Set(CTEST_PROJECT_NAME "CbmRoot")
+set(CTEST_CMAKE_GENERATOR "Unix Makefiles")
+set(CTEST_USE_LAUNCHERS ON)
+
+Set(CTEST_CONFIGURE_COMMAND " \"${CMAKE_EXECUTABLE_NAME}\" \"-G${CTEST_CMAKE_GENERATOR}\" \"-DCTEST_USE_LAUNCHERS=${CTEST_USE_LAUNCHERS}\" \"-DDOWNLOAD_EXTERNALS=OFF\" \"${CTEST_SOURCE_DIRECTORY}\" ")
+
+if ("$ENV{CTEST_SITE}" STREQUAL "")
+  set(CTEST_SITE "${fqdn}")
+else()
+  set(CTEST_SITE $ENV{CTEST_SITE})
+endif()
+
+if ("$ENV{LABEL}" STREQUAL "")
+  set(CTEST_BUILD_NAME "format-check")
+else()
+  set(CTEST_BUILD_NAME $ENV{LABEL})
+endif()
+
+ctest_start(Experimental)
+
+ctest_configure(BUILD "${CTEST_BINARY_DIRECTORY}")
+
+ctest_build(TARGET FormatCheck FLAGS "")
+
+ctest_submit()

@@ -1,0 +1,12 @@
+DIRECTORY: ${VMCWORKDIR}/macro/L1/configs
+
+DESCRIPTION:
+  Directory to store example configuration files, related to CA tracking.
+
+FILES:
+  config_ideal_hits_mcbm.yaml
+    Example of a configuration file for the cbm::ca::IdealHitProducer task for mCBM.
+  ca_params_mcbm.yaml
+    Mandatory configuration file to initialize tracking in mCBM.
+  ca_params_sts.yaml
+    Mandatory configuration file to initialize STS-tracking in CBM.

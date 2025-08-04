@@ -1,0 +1,47 @@
+/* Copyright (C) 2023 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+   SPDX-License-Identifier: GPL-3.0-only
+   Authors: Frederic Linz [committer], Volker Friese */
+
+/** @file Application.cxx
+ ** @author Frederic Linz <f.linz@gsi.de>
+ ** @date 27.10.2023
+ **/
+
+#include "Application.h"
+
+#include "Config.h"
+
+using std::string;
+
+namespace cbm::atconverter
+{
+
+  // -----   Constructor   ----------------------------------------------------
+  Application::Application(ProgramOptions const& opt) : fOpt(opt) {}
+  // --------------------------------------------------------------------------
+
+
+  // -----   Run the reconstruction   -----------------------------------------
+  void Application::Exec()
+  {
+
+    // --- Use program options
+    fRun.SetOutput(fOpt.OutputFile().c_str());
+    fRun.SetTraFiles(fOpt.TraFiles());
+    fRun.SetRawFile(fOpt.RawFile().c_str());
+    fRun.SetParFile(fOpt.ParFile().c_str());
+    fRun.SetRecoFile(fOpt.RecoFile().c_str());
+    fRun.SetGeoSetupTag(fOpt.SetupTag().c_str());
+    if (fOpt.Overwrite()) fRun.AllowOverwrite();
+
+    // --- Read configuration from YAML file
+    cbm::atconverter::Config config;
+    config.LoadYaml(fOpt.ConfigFile());
+    fRun.SetConfig(config);
+
+    // --- Execute reconstruction run
+    fRun.Exec();
+  }
+  // --------------------------------------------------------------------------
+
+}  // namespace cbm::atconverter

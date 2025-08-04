@@ -1,0 +1,27 @@
+#  Copyright (C) 2023 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+#  SPDX-License-Identifier: GPL-3.0-only
+#  Authors: Sergei Zharko [committer] 
+#  
+# Example of user-configuration file for CA tracking in CBM
+#
+#
+ca:
+  core:
+    common:
+      random_seed: 1000
+    track_finder:
+      #
+      # TODO: ....
+      iterations:
+        - name: "FastPrim"
+          max_qp: 2
+        - name: "AllPrim"
+        - name: "AllPrimJump"
+          track_chi2_cut: 40
+        - name: "User-1"
+          base_iteration: "AllSec"
+          track_chi2_cut: 30
+        - name: "AllPrimaryElectron"
+          track_chi2_cut: 30
+
+...

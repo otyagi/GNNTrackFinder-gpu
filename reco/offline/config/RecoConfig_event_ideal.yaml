@@ -1,0 +1,22 @@
+global:
+  log_level: INFO
+  log_verbose: LOW
+  log_color: true
+  mode: event
+  nTimeslices: -1
+  firstTimeslice: 0
+evbuild:
+  type: ideal
+  overlap: allow
+  triggerDetector: sts
+  minNumDigis: 1000
+  maxNumDigis: -1
+  trigWinMin: -500
+  trigWinMax: 500
+sts:
+  usegpu: false
+trd:
+  trigThresh: 0.5e-6
+littrack:
+  trackingType: branch
+  mergingType: nearest_hit

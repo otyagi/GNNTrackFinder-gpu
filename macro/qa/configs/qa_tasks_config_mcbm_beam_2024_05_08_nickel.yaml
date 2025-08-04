@@ -1,0 +1,90 @@
+#  Copyright (C) 2023 GSI Helmholtzzentrum fuer Schwerionenforschung, Darmstadt
+#  SPDX-License-Identifier: GPL-3.0-only
+#  Authors: Sergei Zharko [committer]
+#
+## @file   qa_task_config_mcbm.yaml
+## @brief  Configuration file for QA-tasks in mCBM
+## @since  27.07.2023
+## @author Sergei Zharko <s.zharko@gsi.de>
+
+qa:
+  CbmCaInputQaMvd:
+    check_list:
+      station_position_ordering: true
+      station_position_hit_delta_z: false
+      hit_efficiency_station_%d: true
+      pull_x_station_%d: true
+      pull_y_station_%d: true
+      pull_t_station_%d: true
+      pull_station_%_pull_x: false
+  CbmCaInputQaSts:
+    # Specific configuration, provided in the Config structure of the QA-task
+    #specific:
+    #  McTrackCuts:
+    #    MinMom: 0.1 # [GeV/c]
+    #    MaxTheta: 60. # [grad]
+    #    IsPrimary: true
+    #  PullMeanThrsh: 0.1
+    #  PullWidthThrsh: 2.0
+    #  EffThrsh: 0.5
+    #  MaxDiffZStHit: 1.0
+    check_list:
+      station_position_ordering: true
+      station_position_hit_delta_z: false
+      hit_efficiency_station_%d: true
+      pull_x_station_%d: true
+      pull_y_station_%d: true
+      pull_t_station_%d: true
+      pull_u_%d_digis: true
+      pull_v_%d_digis: true
+    check_histograms:
+      - name: "Station 0/pull_x_st0"
+        point_to_point: { use: 1 }
+        ratio: { use: 1, min: 0.5, max: 1.5 }
+        chi2Test: {use: 1, max: 10. }
+      - name: "Station 0/pull_y_st0"
+        point_to_point: { use: 1 }
+        ratio: { use: 1, min: 0.5, max: 1.5 }
+        chi2Test: {use: 1, max: 10., stat_opt: "UU" }
+  CbmCaInputQaMuch:
+    check_list:
+      station_position_ordering: true
+      station_position_hit_delta_z: true
+      hit_efficiency_station_%d: true
+      pull_x_station_2: false
+      pull_x_station_3: false
+      pull_x_station_%d: true
+      pull_y_station_%d: true
+      pull_t_station_%d: true
+      pull_t_station_1: false
+      pull_t_station_3: false
+  CbmCaInputQaTrd:
+    histograms:
+      #xy_station0:
+      #  x: { nbins: 500, min: -20., max: 20. }
+      #  y: { nbins: 500, min: -20., max: 20. }
+      #xy_station1:
+      #  x: { nbins: 500, min: -100., max: 100. }
+      #  y: { nbins: 500, min: -100., max: 100. }
+      #xy_station2:
+      #  x: { nbins: 500, min: -100., max: 100. }
+      #  y: { nbins: 500, min: -100., max: 100. }
+    profiles: none
+    check_list:
+      station_position_ordering: true
+      station_position_hit_delta_z: false
+      hit_efficiency_station_%d: true
+      pull_t_station_0: false
+      pull_x_station_%d: true
+      pull_y_station_%d: true
+      pull_t_station_%d: true
+  CbmCaInputQaTof:
+    check_list:
+      station_position_ordering: true
+      station_position_hit_delta_z: false
+      hit_efficiency_station_%d: true
+      pull_x_station_%d: true
+      pull_y_station_%d: true
+      pull_t_station_%d: true
+
+...

@@ -1,0 +1,108 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9376018..c87ecb1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,7 +15,18 @@ endif()
+ Set(USE_FAIRROOT FALSE)
+ Set(USE_EXAMPLES FALSE)
+ #check if simpath detected
+-if(DEFINED ENV{SIMPATH})
++
++if(NOT DEFINED ENV{SIMPATH} AND NOT DEFINED SIMPATH)
++message (FATAL_ERROR "\
++You did not define the environment variable SIMPATH or define SIMPATH when calling cmake. \
++Either of the two is needed to properly find the external packages. \
++Please either set this environment variable or pass -DSIMPATH=<path> and execute cmake again. \
++")
++endif()
++if (NOT DEFINED SIMPATH)
++  set(SIMPATH $ENV{SIMPATH})
++endif()
++if(DEFINED SIMPATH)
+     Set(USE_FAIRROOT TRUE)      
+ endif()
+ #check if fairroot disabled
+diff --git a/cmake/fair/CheckCompiler.cmake b/cmake/fair/CheckCompiler.cmake
+index 2bc05b2..91a6fa2 100644
+--- a/cmake/fair/CheckCompiler.cmake
++++ b/cmake/fair/CheckCompiler.cmake
+@@ -19,7 +19,7 @@ endif (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+ # the compiler and compiler flags used to install fairsoft.
+ # Compare compiler and compiler flags used to compile fairsoft with the compiler and flags used now
+ # In case of differences print a warning
+-Find_Program(FAIRSOFT_CONFIG fairsoft-config PATHS $ENV{SIMPATH}/bin $ENV{FAIRSOFT_ROOT}/bin NO_DEFAULT_PATH)
++Find_Program(FAIRSOFT_CONFIG fairsoft-config PATHS ${SIMPATH}/bin $ENV{SIMPATH}/bin $ENV{FAIRSOFT_ROOT}/bin NO_DEFAULT_PATH)
+ 
+ If(FAIRSOFT_CONFIG)
+   Message(STATUS "fairsoft-config found")
+diff --git a/cmake/modules/CMakeFairRoot.cmake b/cmake/modules/CMakeFairRoot.cmake
+index 1fad98c..19a3290 100644
+--- a/cmake/modules/CMakeFairRoot.cmake
++++ b/cmake/modules/CMakeFairRoot.cmake
+@@ -22,9 +22,12 @@ IF(NOT UNIX)
+ ENDIF(NOT UNIX)  
+     
+     
+-IF(NOT DEFINED ENV{SIMPATH})
++if(NOT DEFINED ENV{SIMPATH} AND NOT DEFINED SIMPATH)
+   MESSAGE(FATAL_ERROR "You did not define the environment variable SIMPATH which is nedded to find the external packages. Please set this variable and execute cmake again.")
+ ENDIF(NOT DEFINED ENV{SIMPATH})
++if(NOT SIMPATH)
++  Set(SIMPATH $ENV{SIMPATH})
++endif()
+     
+ find_package(ROOT 6.00.00 REQUIRED)
+   if("${ROOT_VERSION_MAJOR}.${ROOT_VERSION_MINOR}" VERSION_GREATER 6.16)
+@@ -36,7 +39,6 @@ find_package(ROOT 6.00.00 REQUIRED)
+     set(VMCLIB VMCLibrary)
+   endif()
+ endif()
+-Set(SIMPATH $ENV{SIMPATH})
+ Set(Boost_NO_SYSTEM_PATHS TRUE)
+ Set(Boost_NO_BOOST_CMAKE TRUE)
+ Set(BOOST_ROOT ${SIMPATH})
+diff --git a/cmake/modules/HalMacros.cmake b/cmake/modules/HalMacros.cmake
+index c48a4ca..19e60d0 100644
+--- a/cmake/modules/HalMacros.cmake
++++ b/cmake/modules/HalMacros.cmake
+@@ -8,15 +8,20 @@ Macro(SetFairBase)
+       SET(FAIRBASE ${FAIRBASE})
+     Else (FAIRBASE)
+       Message(STATUS "NOT Found FAIRBASE")
+-      IF(NOT DEFINED ENV{FAIRROOTPATH})
++      if(NOT DEFINED ENV{FAIRROOTPATH} AND NOT DEFINED FAIRROOTPATH)
+          MESSAGE(FATAL_ERROR "You did not define the environment variable FAIRROOTPATH which is needed to find FairRoot. Please set this variable and execute cmake again.")
+          SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/fair" ${CMAKE_MODULE_PATH})
+          MESSAGE(WARNING "CMP ${CMAKE_MODULE_PATH}")
+-      ENDIF(NOT DEFINED ENV{FAIRROOTPATH})
+-      SET(FAIRROOTPATH $ENV{FAIRROOTPATH})
++      endif()
++      if(NOT FAIRROOTPATH)
++        SET(FAIRROOTPATH $ENV{FAIRROOTPATH})
++      endif()
++      if(NOT ENV{FAIRROOTPATH})
++        SET(ENV{FAIRROOTPATH} ${FAIRROOTPATH})
++      endif()
+     EndIf (FAIRBASE)
+-    set(CMAKE_MODULE_PATH "$ENV{FAIRROOTPATH}/share/fairbase/cmake/modules_old" ${CMAKE_MODULE_PATH})
+-    set(CMAKE_MODULE_PATH "$ENV{FAIRROOTPATH}/share/fairbase/cmake/modules"  ${CMAKE_MODULE_PATH})
++    set(CMAKE_MODULE_PATH "${FAIRROOTPATH}/share/fairbase/cmake/modules_old" ${CMAKE_MODULE_PATH})
++    set(CMAKE_MODULE_PATH "${FAIRROOTPATH}/share/fairbase/cmake/modules"  ${CMAKE_MODULE_PATH})
+    IF(FAIRROOTPATH)
+       Set(CheckSrcDir "${FAIRROOTPATH}/share/fairbase/cmake/checks")
+     ELSE(FAIRROOTPATH)
+diff --git a/fair/CMakeLists.txt b/fair/CMakeLists.txt
+index 266e82e..46246e6 100644
+--- a/fair/CMakeLists.txt
++++ b/fair/CMakeLists.txt
+@@ -8,8 +8,8 @@ ${HAL_CORE}/fair
+ Set(SYSTEM_INCLUDE_DIRECTORIES
+  ${ROOT_INCLUDE_DIR} 
+  ${BASE_INCLUDE_DIRECTORIES}
+- $ENV{SIMPATH}/include
+- $ENV{SIMPATH}/include/vmc
++ ${SIMPATH}/include
++ ${SIMPATH}/include/vmc
+ )
+ 
+ Set(LINK_DIRECTORIES

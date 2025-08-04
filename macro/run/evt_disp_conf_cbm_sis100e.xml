@@ -1,0 +1,46 @@
+<xmlconf>
+<!--
+- color is handled by the FairEventManager, converted from text to ROOT colors, ignored if "", recursive value is depth
+- transparency is handled by the FairEventManager, should be between 1 and 99, ignored if "", recursive value is depth
+  (0 and 100 theoritically, see https://root-forum.cern.ch/t/make-a-geometry-transparent/47665/9)
+- Visibility is boolean and applied to all daughters if recursive set >0
+  => To disable a full detector apart from a few leaves,
+     1) set the top node to "visibility = 0, recursive = 1"
+     2) set each intermediate node to "visibility = 0, recursive = 1"
+     3) set the nodes that should be visible to "visibility = 1, recursive = 1"
+-->
+<Detectors>
+    <detector name="cave_1" color="" transparency="" visibility="" recursive="0">
+        <detector name="platform_v22b_0" color="" transparency="" visibility="0" recursive="1"></detector>
+        <detector name="magnet_v22a_0" color="" transparency="" visibility="0" recursive="1"></detector>
+        <detector name="sts_v22c_0" color="" transparency="" visibility="1" recursive="1">
+            <detector name="sts_passive_v22c_20" color="" transparency="" visibility="0" recursive="1"></detector>
+        </detector>
+        <detector name="rich_v21a_0" color="" transparency="" visibility="1" recursive="1">
+            <detector name="rich_container_1" color="" transparency="" visibility="" recursive="1">
+                <detector name="rich_gas_1" color="" transparency="" visibility="" recursive="1">
+                    <detector name="shielding_box_1" color="" transparency="" visibility="0" recursive="1"></detector>
+                    <detector name="shielding_box_2" color="" transparency="" visibility="0" recursive="1"></detector>
+                    <detector name="sens_plane_1" color="" transparency="" visibility="0" recursive="1"></detector>
+                    <detector name="sens_plane_1" color="" transparency="" visibility="0" recursive="1"></detector>
+                    <detector name="RICH_mainframe_1_1" color="" transparency="" visibility="0" recursive="1"></detector>
+                    <detector name="RICH_mainframe_2_1" color="" transparency="" visibility="0" recursive="1"></detector>
+                </detector>
+            </detector>
+        </detector>
+        <detector name="trd_v20b_1e_0" color="" transparency="" visibility="1" recursive="1">
+            <detector name="support_trd1_1" color="" transparency="" visibility="0" recursive="1"></detector>
+        </detector>
+        <detector name="tof_v21a_1e_0" color="" transparency="" visibility="1" recursive="1">
+            <detector name="Bar_0" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_1" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_2" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_3" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_0" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_1" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_2" color="" transparency="" visibility="0" recursive="1"></detector>
+            <detector name="Bar_3" color="" transparency="" visibility="0" recursive="1"></detector>
+        </detector>
+    </detector>
+</Detectors>
+</xmlconf>
