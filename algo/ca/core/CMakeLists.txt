@@ -6,6 +6,7 @@ set(INCLUDE_DIRECTORIES
   ${CMAKE_CURRENT_SOURCE_DIR}/data
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental
+  ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
 )
 
 set(SRCS
@@ -36,6 +37,8 @@ set(SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTrackFinderSetup.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTripletConstructor.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaDeviceImage.cxx
+
+  # ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn/.cxx
 )
 
 SET_SOURCE_FILES_PROPERTIES(${SRCS} PROPERTIES COMPILE_FLAGS "-O3")
@@ -58,11 +61,14 @@ target_include_directories(CaCore
          ${CMAKE_CURRENT_SOURCE_DIR}/qa
          ${CMAKE_CURRENT_SOURCE_DIR}/tracking
          ${CMAKE_CURRENT_SOURCE_DIR}/experimental
+         ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
+         ${CMAKE_CURRENT_SOURCE_DIR}/
 )
 
 set(DEVICE_SRCS
   experimental/CaDeviceImage.cxx
   experimental/CaGpuTripletConstructor.cxx
+  # experimental_Gnn/.cxx
 )
 
 target_compile_definitions(CaCore PUBLIC NO_ROOT)
@@ -88,6 +94,7 @@ if (NOT CBM_ONLINE_STANDALONE)
            ${CMAKE_CURRENT_SOURCE_DIR}/qa
            ${CMAKE_CURRENT_SOURCE_DIR}/tracking
            ${CMAKE_CURRENT_SOURCE_DIR}/experimental
+           ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
            ${CMAKE_CURRENT_SOURCE_DIR}
   )
 
@@ -164,6 +171,8 @@ install(
     experimental/CaGpuTripletConstructor.h
     experimental/CaDeviceImage.h
     experimental/CaGpuTimeMonitor.h
+
+    experimental_Gnn/GnnGpuTimeMonitor.h
 
     DESTINATION
     include/

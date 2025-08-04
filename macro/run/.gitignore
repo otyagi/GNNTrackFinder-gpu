@@ -5,3 +5,8 @@ data/qa/*.root
 CbmRecoUnpack.perf.root
 gphysi.dat
 urqmd*.root
+CAdebug.root
+FairRunInfo_CAdebug.root
+L1_histo_urqmd_mbias.reco.root
+L1_perftable_urqmd_mbias.reco.root
+L1material.root
