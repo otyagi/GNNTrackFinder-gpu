@@ -21,6 +21,8 @@
 #include "CaVector.h"
 #include "CaWindowData.h"
 
+#include "GraphConstructor.h"
+
 namespace cbm::algo::ca
 {
 
@@ -94,6 +96,8 @@ namespace cbm::algo::ca
     void SetupGpuTrackFinder(GpuTrackFinderSetup& gpuTrackFinderSetup);
 
     void ConstructTripletsGPU(WindowData& wData, GpuTrackFinderSetup& gpuTrackFinderSetup, int iteration);
+
+    void GNNTrackFinder(WindowData& wData, const int iteration);
 
     // ** Functions, which pack and unpack indexes of station and triplet **
 

@@ -151,51 +151,68 @@ namespace cbm::algo::ca
       SetupGpuTrackFinder(gpuTrackFinderSetup.value());
     }
 
-    // Run CA iterations
-    frMonitorData.StartTimer(ETimer::FindTracks);
-    auto& caIterations = fParameters.GetCAIterations();
-    for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
-      // ----- Prepare iteration
-      frMonitorData.StartTimer(ETimer::PrepareIteration);
-      PrepareCAIteration(*iter, wData, iter == caIterations.begin());
-      frMonitorData.StopTimer(ETimer::PrepareIteration);
+    if (constants::gpu::GNNTracking) {  // Run GNN tracking
+      frMonitorData.StartTimer(ETimer::FindTracks);
+      auto& caIterations = fParameters.GetCAIterations();
+      for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
+        // ----- Prepare iteration
+        frMonitorData.StartTimer(ETimer::PrepareIteration);
+        PrepareCAIteration(*iter, wData, iter == caIterations.begin());
+        frMonitorData.StopTimer(ETimer::PrepareIteration);
 
-      if constexpr (constants::gpu::GpuTracking) {
-        // ----- Triplets construction on GPU -----
-        frMonitorData.StartTimer(ETimer::ConstructTriplets);
-        ConstructTripletsGPU(wData, gpuTrackFinderSetup.value(), iter_num);
+        GNNTrackFinder(wData, iter_num);
+
         iter_num++;
-        frMonitorData.StopTimer(ETimer::ConstructTriplets);
-      }
-      else {
-        // ----- Triplets construction -----
-        frMonitorData.StartTimer(ETimer::ConstructTriplets);
-        ConstructTriplets(wData);
-        frMonitorData.StopTimer(ETimer::ConstructTriplets);
-      }
 
-      // ----- Search for neighbouring triplets -----
-      frMonitorData.StartTimer(ETimer::SearchNeighbours);
-      SearchNeighbors(wData);
-      frMonitorData.StopTimer(ETimer::SearchNeighbours);
+      }  // ---- Loop over Track Finder iterations: END ----//
+      frMonitorData.StopTimer(ETimer::FindTracks);
+    }
+    else {  // Run CA iterations
+      frMonitorData.StartTimer(ETimer::FindTracks);
+      auto& caIterations = fParameters.GetCAIterations();
+      for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
+        // ----- Prepare iteration
+        frMonitorData.StartTimer(ETimer::PrepareIteration);
+        PrepareCAIteration(*iter, wData, iter == caIterations.begin());
+        frMonitorData.StopTimer(ETimer::PrepareIteration);
 
-      // ----- Collect track candidates and create tracks
-      frMonitorData.StartTimer(ETimer::CreateTracks);
-      CreateTracks(wData, *iter, std::get<2>(fTripletData));
-      frMonitorData.StopTimer(ETimer::CreateTracks);
-
-      // ----- Suppress strips of suppressed hits
-      frMonitorData.StartTimer(ETimer::SuppressHitKeys);
-      for (unsigned int ih = 0; ih < wData.Hits().size(); ih++) {
-        if (wData.IsHitSuppressed(ih)) {
-          const ca::Hit& hit                 = wData.Hit(ih);
-          wData.IsHitKeyUsed(hit.FrontKey()) = 1;
-          wData.IsHitKeyUsed(hit.BackKey())  = 1;
+        if constexpr (constants::gpu::GpuTracking) {
+          // ----- Triplets construction on GPU -----
+          frMonitorData.StartTimer(ETimer::ConstructTriplets);
+          ConstructTripletsGPU(wData, gpuTrackFinderSetup.value(), iter_num);
+          iter_num++;
+          frMonitorData.StopTimer(ETimer::ConstructTriplets);
         }
-      }
-      frMonitorData.StopTimer(ETimer::SuppressHitKeys);
-    }  // ---- Loop over Track Finder iterations: END ----//
-    frMonitorData.StopTimer(ETimer::FindTracks);
+        else {
+          // ----- Triplets construction -----
+          frMonitorData.StartTimer(ETimer::ConstructTriplets);
+          ConstructTriplets(wData);
+          frMonitorData.StopTimer(ETimer::ConstructTriplets);
+        }
+
+        // ----- Search for neighbouring triplets -----
+        frMonitorData.StartTimer(ETimer::SearchNeighbours);
+        SearchNeighbors(wData);
+        frMonitorData.StopTimer(ETimer::SearchNeighbours);
+
+        // ----- Collect track candidates and create tracks
+        frMonitorData.StartTimer(ETimer::CreateTracks);
+        CreateTracks(wData, *iter, std::get<2>(fTripletData));
+        frMonitorData.StopTimer(ETimer::CreateTracks);
+
+        // ----- Suppress strips of suppressed hits
+        frMonitorData.StartTimer(ETimer::SuppressHitKeys);
+        for (unsigned int ih = 0; ih < wData.Hits().size(); ih++) {
+          if (wData.IsHitSuppressed(ih)) {
+            const ca::Hit& hit                 = wData.Hit(ih);
+            wData.IsHitKeyUsed(hit.FrontKey()) = 1;
+            wData.IsHitKeyUsed(hit.BackKey())  = 1;
+          }
+        }
+        frMonitorData.StopTimer(ETimer::SuppressHitKeys);
+      }  // ---- Loop over Track Finder iterations: END ----//
+      frMonitorData.StopTimer(ETimer::FindTracks);
+    }
 
     // Fit tracks
     frMonitorData.StartTimer(ETimer::FitTracks);
@@ -899,4 +916,22 @@ namespace cbm::algo::ca
       }
     }
   }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  void TrackFinderWindow::GNNTrackFinder(WindowData& wData, const int iteration)
+  {
+    GraphConstructor graphConstructor(wData);
+
+    // Argument to run classifier is:
+    // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
+    switch (iteration) {
+      case 0: graphConstructor.FindFastPrim(2); break;
+      default: LOG(info) << "Unexpected iteration index: " << iteration; break;
+    }
+
+    // Pass tracks to next stage in pipeline
+    graphConstructor.PrepareFinalTracks();
+  }
+
+
 }  // namespace cbm::algo::ca

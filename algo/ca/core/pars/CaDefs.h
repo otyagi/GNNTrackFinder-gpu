@@ -94,7 +94,7 @@ namespace cbm::algo::ca::constants
   namespace math
   {
     constexpr double Pi = 3.14159265358979323846;  ///< Value of PI, used in ROOT TMath
-  }                                                // namespace math
+  }  // namespace math
 
   /// Miscellaneous constants
   namespace misc
@@ -111,11 +111,12 @@ namespace cbm::algo::ca::constants
     constexpr int MaxDoubletsFromHit     = 150;    ///< Maximum number of doublets from a hit
     constexpr int MaxTripletsFromDoublet = 15;     ///< Maximum number of triplets from a doublet
     constexpr int MaxNofStations         = 20;     ///< Maximum number of stations //TODO: temporary solution
-    constexpr bool GpuTracking           = true;  ///< Flag: use GPU for tracking
-    constexpr bool GpuTimeMonitoring     = true;  ///< Flag: use GPU for time monitoring
+    constexpr bool GpuTracking           = true;   ///< Flag: use GPU for tracking
+    constexpr bool GpuTimeMonitoring     = true;   ///< Flag: use GPU for time monitoring
     constexpr bool GpuSortTriplets       = false;  ///< Flag: use GPU for sorting triplets
     constexpr bool CpuSortTriplets       = true;   ///< Flag: use CPU for sorting triplets
-  }                                                // namespace gpu
+    constexpr bool GNNTracking           = false;  ///< Flag: use OT GNN for tracking
+  }  // namespace gpu
 
   /// \brief Undefined values
   template<typename T1, typename T2 = T1>
@@ -237,5 +238,5 @@ namespace cbm::algo::ca::constants
     constexpr char CYbr[] = "\e[1;7;36m";  ///< bold-reverse cyan
     constexpr char GYbr[] = "\e[1;7;37m";  ///< bold-reverse grey
     constexpr char WTbr[] = "\e[1;7;38m";  ///< bold-reverse white
-  }                                        // namespace clrs
+  }  // namespace clrs
 }  // namespace cbm::algo::ca::constants

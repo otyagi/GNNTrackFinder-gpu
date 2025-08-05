@@ -33,6 +33,7 @@ set(SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/CaTrackFinderWindow.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/CaTrackFitter.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/CaTripletConstructor.cxx
+  ${CMAKE_CURRENT_SOURCE_DIR}/tracking/GraphConstructor.cxx
 
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTrackFinderSetup.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTripletConstructor.cxx
@@ -158,6 +159,7 @@ install(
     tracking/CaTrackFinderWindow.h
     tracking/CaTrackFitter.h
     tracking/CaTripletConstructor.h
+    tracking/GraphConstructor.h
 
     experimental/CaDeviceImage.h
     experimental/CaGpuGrid.h
