@@ -160,7 +160,7 @@ namespace cbm::algo::ca
     {
       std::vector<int> EmbNetTopology_ = {3, 16, 16, 6};
       EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
-      const std::string srcDir         = "/u/otyagi/cbmroot/NN/";
+      const std::string srcDir         = "/home/tyagi/cbmroot/NN/";
       if (iter == 0) {
         std::string fNameModel   = "embed/embed"; 
         std::string fNameWeights = srcDir + fNameModel + "Weights_11.txt";
@@ -176,9 +176,9 @@ namespace cbm::algo::ca
 
       std::vector<fscal> input;
       for (int istal = 0; istal < NStations; istal++) {
-        int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
         staStartIndex.push_back(staStartIndex.back() + nGridEntriesL);
-        for (auto iel = 0; iel < nGridEntriesL; ++iel) {
+        for (auto iel = 0; iel < nGridEntriesL; iel++) {
           ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId(); // index in fvHits
           ca::Hit& hitl        = frWData.Hit(ihitl);
           fscal x              = hitl.X();
@@ -205,9 +205,9 @@ namespace cbm::algo::ca
       dum.push_back(0);
       for (int istal = 0; istal < NStations; istal++) {
         doublets[istal].clear();
-        int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
         doublets[istal].reserve(nGridEntriesL);
-        for (int iel = 0; iel < nGridEntriesL; ++iel) {
+        for (int iel = 0; iel < nGridEntriesL; iel++) {
           doublets[istal].push_back(dum);
         }
       }
@@ -228,11 +228,11 @@ namespace cbm::algo::ca
       int maxDistIndex = 0;
       float d          = 0.0f;
       for (int istal = 0; istal < NStations; istal++) {
-        int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
         for (int iel = 0; iel < nGridEntriesL; iel++) {
           ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
 
-          int nGridEntriesM = frWData.Grid(istal).GetEntries().size();
+          int nGridEntriesM = frWData.Grid(istal + 1).GetEntries().size();
           for (int iem = 0; iem < nGridEntriesM; iem++) {
             ca::HitIndex_t ihitm = frWData.Grid(istal + 1).GetEntries()[iem].GetObjectId();  // index in fvHits
 

@@ -155,7 +155,7 @@ namespace cbm::algo::ca
       frMonitorData.StartTimer(ETimer::FindTracks);
       auto& caIterations = fParameters.GetCAIterations();
       for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
-        // ----- Prepare iteration
+        // ----- Prepare iteration -----
         frMonitorData.StartTimer(ETimer::PrepareIteration);
         PrepareCAIteration(*iter, wData, iter == caIterations.begin());
         frMonitorData.StopTimer(ETimer::PrepareIteration);
