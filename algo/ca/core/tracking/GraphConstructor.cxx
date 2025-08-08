@@ -26,7 +26,14 @@ namespace cbm::algo::ca
   }
 
   // @brief: for debugging. saves triplets as tracks
-  void GraphConstructor::SaveAllTripletsAsTracks() {}
+  void GraphConstructor::SaveAllTripletsAsTracks()
+  {
+    tracks.clear();
+    for (const auto& triplet : triplets_) {
+      tracks.push_back(triplet);
+    }
+    LOG(info) << "Num tracks(triplets as tracks): " << tracks.size();
+  }
 
   void GraphConstructor::FindFastPrim(const int mode)
   {
@@ -44,7 +51,7 @@ namespace cbm::algo::ca
       for (int iel = 0; iel < (int) doublets[istal].size(); iel++) {
         for (int iem = 0; iem < (int) doublets[istal][iel].size(); iem++) {
           int ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
-          y1 = frWData.Hit(ihitl).Y();
+          y1        = frWData.Hit(ihitl).Y();
           z1        = frWData.Hit(ihitl).Z() + 44.0f;
           y2        = frWData.Hit(doublets[istal][iel][iem]).Y();
           z2        = frWData.Hit(doublets[istal][iel][iem]).Z() + 44.0f;
@@ -64,60 +71,60 @@ namespace cbm::algo::ca
     }
     LOG(info) << "Num true edges after removing displaced edges: " << nEdgesFound;
 
-    SaveAllEdgesAsTracks();
-    return;
+    // SaveAllEdgesAsTracks();
+    // return;
 
-    // const float YZCut = 0.1;  // (radians) def - 0.1 from distributions
-    // const float XZCut = 0.1;  // def - 0.1 from distributions
-    // // create triplets with edges with shared hits and prepare for input to triplet classifier
-    // std::vector<std::vector<int>> allTripletsIndex;  // index in fWindowHits
-    // std::vector<float> tripletScores;
-    // for (int istal = 0; istal < fAlgo->GetParameters().GetNstationsActive() - 2; istal++) {
-    //   for (int iel = 0; iel < (int) edges[istal].size(); iel++) {
-    //     for (int iem = 0; iem < (int) edges[istal + 1].size(); iem++) {
-    //       if (edges[istal][iel].second == edges[istal + 1][iem].first) {  /// overlapping edges form triplet
-    //         std::vector<int> triplet;
-    //         triplet.push_back(edges[istal][iel].first);
-    //         triplet.push_back(edges[istal][iel].second);
-    //         triplet.push_back(edges[istal + 1][iem].second);
-    //         const auto& hit1 = fAlgo->fWindowHits[triplet[0]];
-    //         const auto& hit2 = fAlgo->fWindowHits[triplet[1]];
-    //         const auto& hit3 = fAlgo->fWindowHits[triplet[2]];
+    const float YZCut = 0.1;  // (radians) def - 0.1 from distributions
+    const float XZCut = 0.1;  // def - 0.1 from distributions
+    // create triplets with edges with shared hits and prepare for input to triplet classifier
+    std::vector<std::vector<int>> allTripletsIndex;  // index in fWindowHits
+    std::vector<float> tripletScores;
+    for (int istal = 0; istal < NStations - 2; istal++) {
+      for (int iel = 0; iel < (int) edges[istal].size(); iel++) {
+        for (int iem = 0; iem < (int) edges[istal + 1].size(); iem++) {
+          if (edges[istal][iel].second == edges[istal + 1][iem].first) {  /// overlapping edges form triplet
+            std::vector<int> triplet;
+            triplet.push_back(edges[istal][iel].first);
+            triplet.push_back(edges[istal][iel].second);
+            triplet.push_back(edges[istal + 1][iem].second);
+            const auto& hit1 = frWData.Hit(triplet[0]);
+            const auto& hit2 = frWData.Hit(triplet[1]);
+            const auto& hit3 = frWData.Hit(triplet[2]);
 
-    //         // Cuts on triplet. Limits come from distributions
-    //         // YZ angle difference
-    //         const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
-    //         const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
-    //         float angleDiffYZ    = angle1YZ - angle2YZ;
-    //         if (angleDiffYZ < -YZCut || angleDiffYZ > YZCut) continue;
+            // Cuts on triplet. Limits come from distributions
+            // YZ angle difference
+            const float angle1YZ    = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+            const float angle2YZ    = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+            const float angleDiffYZ = angle1YZ - angle2YZ;
+            if (angleDiffYZ < -YZCut || angleDiffYZ > YZCut) continue;
 
-    //         // XZ slope and angle difference
-    //         const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
-    //         const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
-    //         float angleDiffXZ    = angle1XZ - angle2XZ;
-    //         if (angleDiffXZ < -XZCut || angleDiffXZ > XZCut) continue;
+            // XZ slope and angle difference
+            const float angle1XZ    = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+            const float angle2XZ    = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+            const float angleDiffXZ = angle1XZ - angle2XZ;
+            if (angleDiffXZ < -XZCut || angleDiffXZ > XZCut) continue;
 
-    //         allTripletsIndex.push_back(triplet);
-    //         tripletScores.push_back(edgeScores[istal][iel] + edgeScores[istal + 1][iem]);
-    //       }
-    //     }
-    //   }
-    // }
-    // LOG(info) << "Number of triplets created from edges: " << allTripletsIndex.size();
+            allTripletsIndex.push_back(triplet);
+            tripletScores.push_back(1.0f);  // dummy
+          }
+        }
+      }
+    }
+    LOG(info) << "Number of triplets created from edges: " << allTripletsIndex.size();
 
-    // for (int i = 0; i < (int) allTripletsIndex.size(); i++) {
-    //   triplets_.push_back(allTripletsIndex[i]);
-    //   tripletScores_.push_back(tripletScores[i]);
-    // }
+    for (int i = 0; i < (int) allTripletsIndex.size(); i++) {
+      triplets_.push_back(allTripletsIndex[i]);
+      tripletScores_.push_back(tripletScores[i]);
+    }
 
-    // FitTriplets();  // replaces triplet score from classifier with KF chi2
+    // FitTriplets();  // replaces dummy triplet score with KF chi2
 
-    // if (mode == 0) {
-    //   SaveAllTripletsAsTracks();
-    // }
-    // else {
-    //   CreateTracksTriplets(mode);
-    // }
+    if (mode == 0) {
+      SaveAllTripletsAsTracks();
+    }
+    else {
+      CreateTracksTriplets(mode);
+    }
   }  // FindFastPrim
 
   /// combine overlapping triplets to form tracks. sort by length and score for competition
@@ -162,7 +169,7 @@ namespace cbm::algo::ca
       EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
       const std::string srcDir         = "/home/tyagi/cbmroot/NN/";
       if (iter == 0) {
-        std::string fNameModel   = "embed/embed"; 
+        std::string fNameModel   = "embed/embed";
         std::string fNameWeights = srcDir + fNameModel + "Weights_11.txt";
         std::string fNameBiases  = srcDir + fNameModel + "Biases_11.txt";
         EmbNet_.loadModel(fNameWeights, fNameBiases);
@@ -179,7 +186,7 @@ namespace cbm::algo::ca
         const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
         staStartIndex.push_back(staStartIndex.back() + nGridEntriesL);
         for (auto iel = 0; iel < nGridEntriesL; iel++) {
-          ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId(); // index in fvHits
+          ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
           ca::Hit& hitl        = frWData.Hit(ihitl);
           fscal x              = hitl.X();
           fscal y              = hitl.Y();
