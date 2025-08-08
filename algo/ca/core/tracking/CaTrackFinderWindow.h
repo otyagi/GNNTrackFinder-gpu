@@ -97,7 +97,7 @@ namespace cbm::algo::ca
 
     void ConstructTripletsGPU(WindowData& wData, GpuTrackFinderSetup& gpuTrackFinderSetup, int iteration);
 
-    void GNNTrackFinder(WindowData& wData, const int iteration);
+    void GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration, TrackFitter& fTrackFitter);
 
     // ** Functions, which pack and unpack indexes of station and triplet **
 
@@ -129,7 +129,7 @@ namespace cbm::algo::ca
     TrackingMonitorData& frMonitorData;  ///< Reference to monitor data
     TrackExtender fTrackExtender;        ///< Object of the track extender algorithm
     CloneMerger fCloneMerger;            ///< Object of  the clone merger algorithm
-    TrackFitter fTrackFitter;            ///< Object of the track extender algorithm
+    TrackFitter fTrackFitter;            ///< Object of the track fitter algorithm
 
     /// \note Global array for a given thread
     Vector<int> fvHitKeyToTrack{"TrackFinderWindow::fvHitKeyToTrack"};

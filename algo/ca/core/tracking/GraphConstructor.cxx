@@ -11,7 +11,12 @@
 namespace cbm::algo::ca
 {
 
-  GraphConstructor::GraphConstructor(WindowData& wData) : frWData(wData) {}
+  GraphConstructor::GraphConstructor(const ca::InputData& input, WindowData& wData, TrackFitter& fTrackFitter)
+    : frInput(input)
+    , frWData(wData)
+    , frTrackFitter(fTrackFitter)
+  {
+  }
 
   // @brief: for debugging save all found edges as tracks
   void GraphConstructor::SaveAllEdgesAsTracks()
@@ -117,7 +122,7 @@ namespace cbm::algo::ca
       tripletScores_.push_back(tripletScores[i]);
     }
 
-    // FitTriplets();  // replaces dummy triplet score with KF chi2
+    FitTriplets(0);  // replaces dummy triplet score with KF chi2
 
     if (mode == 0) {
       SaveAllTripletsAsTracks();
@@ -130,7 +135,50 @@ namespace cbm::algo::ca
   /// combine overlapping triplets to form tracks. sort by length and score for competition
   void GraphConstructor::CreateTracksTriplets(const int mode) {}  // CreateTracksTriplets
 
-  void GraphConstructor::FitTriplets() {}  // FitTriplets
+  void GraphConstructor::FitTriplets(const int GNNiteration)
+  {
+    Vector<int> selectedTripletIndexes;
+    Vector<float> selectedTripletScores;
+    Vector<Track> GNNTripletCandidates;
+    Vector<HitIndex_t> GNNTripletHits;
+    GNNTripletCandidates.reserve(triplets_.size());
+    GNNTripletHits.reserve(triplets_.size() * 3);
+    selectedTripletIndexes.reserve(triplets_.size());
+    selectedTripletScores.reserve(triplets_.size());
+
+    std::vector<std::vector<float>>
+      selectedTripletFitParams;  // [chi2, qp, Cqp, T3.Tx()[0], T3.C22()[0], T3.Ty()[0], T3.C33()[0]]
+    selectedTripletFitParams.reserve(triplets_.size());
+
+    for (const auto& trip : triplets_) {
+      for (const auto& hit : trip) {
+        int hitID = frWData.Hit(hit).Id(); // index in InputData
+        GNNTripletHits.push_back(hitID);
+      }
+      Track t;
+      t.fNofHits = trip.size();
+      GNNTripletCandidates.push_back(t);
+    }
+    frTrackFitter.FitGNNTriplets(frInput, frWData, GNNTripletCandidates, GNNTripletHits, selectedTripletIndexes, selectedTripletScores,
+                                selectedTripletFitParams, GNNiteration);
+    LOG(info) << "Candidate triplets fitted with KF.";
+
+    /// remove from tripletScores_ and triplets_, triplets that not selected by KF
+    auto tripletScoresTmp = tripletScores_;
+    auto tripletsTmp      = triplets_;
+    triplets_.clear();
+    tripletScores_.clear();
+    triplets_.reserve(selectedTripletIndexes.size());
+    tripletScores_.reserve(selectedTripletIndexes.size());
+    tripletFitParams_.reserve(selectedTripletIndexes.size());
+    for (std::size_t i = 0; i < selectedTripletIndexes.size(); ++i) {
+      // replace NN score with KF chi2
+      tripletScores_.push_back(selectedTripletScores[i]);
+      tripletFitParams_.push_back(selectedTripletFitParams[i]);
+      triplets_.push_back(tripletsTmp[selectedTripletIndexes[i]]);
+    }
+    LOG(info) << "Num triplets after KF fit: " << tripletScores_.size();
+  }  // FitTriplets
 
   // @brief: add tracks and hits to final containers
   void GraphConstructor::PrepareFinalTracks()

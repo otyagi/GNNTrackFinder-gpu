@@ -10,19 +10,19 @@
 // #include "CaFramework.h"
 // #include "CaGridEntry.h"
 // #include "CaStation.h"
-// #include "CaTrackFit.h"
 // #include "CaTrackParam.h"
 // #include "CaTriplet.h"
 // #include "CaVector.h"
 #include "EmbedNet.h"
 #include "MLPutil.h"
+#include "CaTrackFitter.h"
 
 namespace cbm::algo::ca
 {
   class alignas(kf::VcMemAlign) GraphConstructor {
    public:
     /// Constructor
-    GraphConstructor(WindowData& wData);
+    GraphConstructor(const ca::InputData& input, WindowData& wData, TrackFitter& fTrackFitter);
 
     /// Destructor
     ~GraphConstructor() = default;
@@ -36,7 +36,7 @@ namespace cbm::algo::ca
 
     void SaveAllTripletsAsTracks();
 
-    void FitTriplets();
+    void FitTriplets(const int GNNiteration);
 
     void PrepareFinalTracks();
 
@@ -59,7 +59,9 @@ namespace cbm::algo::ca
     std::vector<std::pair<std::vector<int>, float>> trackAndScores;  // [trackIndex, trackScore]
 
    private:
+    const ca::InputData& frInput;
     WindowData& frWData;
+    TrackFitter& frTrackFitter;
 
     const int NStations = 12; // set in constructor
 

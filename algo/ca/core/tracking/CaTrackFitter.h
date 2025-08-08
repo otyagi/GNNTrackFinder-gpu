@@ -47,6 +47,12 @@ namespace cbm::algo::ca
     /// Fit tracks, found by the CA tracker
     void FitCaTracks(const ca::InputData& input, WindowData& wData);
 
+    /// Fit triplets found by GNN
+    void FitGNNTriplets(const ca::InputData& input, WindowData& wData, Vector<Track>& tripletCandidates,
+                                     Vector<HitIndex_t>& tripletHits, Vector<int>& selectedTripletIndexes,
+                                     Vector<float>& selectedTripletScores,
+                                     std::vector<std::vector<float>>& selectedTripletParams, const int GNNiteration);
+
 
    private:
     ///-------------------------------

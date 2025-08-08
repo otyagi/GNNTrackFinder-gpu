@@ -161,7 +161,7 @@ namespace cbm::algo::ca
         frMonitorData.StopTimer(ETimer::PrepareIteration);
 
         frMonitorData.StartTimer(ETimer::GNNTracking);
-        GNNTrackFinder(wData, iter_num);
+        GNNTrackFinder(input, wData, iter_num, fTrackFitter);
         frMonitorData.StopTimer(ETimer::GNNTracking);
 
         iter_num++;
@@ -920,9 +920,10 @@ namespace cbm::algo::ca
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  void TrackFinderWindow::GNNTrackFinder(WindowData& wData, const int iteration)
+  void TrackFinderWindow::GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration,
+                                         TrackFitter& trackFitter)
   {
-    GraphConstructor graphConstructor(wData);
+    GraphConstructor graphConstructor(input, wData, trackFitter);
 
     // Argument to run classifier is:
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
