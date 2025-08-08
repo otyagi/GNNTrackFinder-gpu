@@ -22,8 +22,7 @@ namespace cbm::algo::ca
 {
   /// \enum  ECounter
   /// \brief Counter keys for the CA algo monitor
-  enum class ECounter
-  {
+  enum class ECounter {
     TrackingCall,  ///< number of the routine calls
     SubTS,         ///< number of sub time-slices
     RecoTrack,     ///< number of reconstructed tracks
@@ -76,7 +75,14 @@ namespace cbm::algo::ca
           StoreTracksWindow,
         StoreTracksFinal,
       Qa,
-    END
+    END,
+    GNNTracking,
+    MetricLearning,
+    NearestNeighbours,
+    TripletConstruction,
+    TripletFit,
+    TrackCandidate,
+    TrackCompetition
   };
   /* clang-format on */
 
@@ -132,6 +138,13 @@ namespace cbm::algo::ca
       SetTimerName(ETimer::StoreTracksWindow, "track storing in window");
       SetTimerName(ETimer::StoreTracksFinal, "final track storing");
       SetTimerName(ETimer::Qa, "QA");
+      SetTimerName(ETimer::GNNTracking, "GNN Tracking");
+      SetTimerName(ETimer::MetricLearning, "Metric Learning");
+      SetTimerName(ETimer::NearestNeighbours, "kNN Nearest Neighbours");
+      SetTimerName(ETimer::TripletConstruction, "Triplet Construction");
+      SetTimerName(ETimer::TripletFit, "Triplet Fit");
+      SetTimerName(ETimer::TrackCandidate, "Track Candidate Construction");
+      SetTimerName(ETimer::TrackCompetition, "Track Competition-Altruistic");
       SetRatioKeys({ECounter::TrackingCall, ECounter::SubTS, ECounter::RecoTrack});
     }
 

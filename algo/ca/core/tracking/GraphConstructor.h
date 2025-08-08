@@ -14,7 +14,8 @@
 // #include "CaTrackParam.h"
 // #include "CaTriplet.h"
 // #include "CaVector.h"
-// #include "EmbedNet.h"
+#include "EmbedNet.h"
+#include "MLPutil.h"
 
 namespace cbm::algo::ca
 {
@@ -43,24 +44,24 @@ namespace cbm::algo::ca
 
     /// -- VARIABLES
 
-    /// move to private??
     std::vector<std::vector<unsigned int>> doublets[20];  // [sta][lhit][mhit]
     /// lhit is index in vGrid(no. of hits on station). use fAlgo.vGrid[sta].GetEntries()[lhit].GetObjectId() to get index in fWindowsHits
-    /// doublets[sta][lhit][mhit] = index in fWindowsHits
+    /// doublets[sta][lhit][mhit] = index in frWData
 
     std::vector<std::vector<std::pair<int, int>>>
-      edges;                                     // [sta][ihitl, ihitm] index in fWindowHits . after edge classifier
-    std::vector<std::vector<float>> edgeScores;  // [sta][edgeStaIndex]
+      edges;                                     // [sta][ihitl, ihitm] index in frWData.Hit
 
-    std::vector<std::vector<int>> triplets_;  // [ihitl, ihitm, ihitr] index in fWindowHits . after triplet classifier
+    std::vector<std::vector<int>> triplets_;  // [ihitl, ihitm, ihitr] index in frWData.Hit
     std::vector<float> tripletScores_;        // triplet score
     std::vector<std::vector<float>> tripletFitParams_;  // [chi2, qp, Cqp, Tx, C22, Ty, C33]
 
-    std::vector<std::vector<int>> tracks;  // indexes in fWindowsHits --> pass to efficiency calculation
+    std::vector<std::vector<int>> tracks;  // indexes in frWData.Hit
     std::vector<std::pair<std::vector<int>, float>> trackAndScores;  // [trackIndex, trackScore]
 
    private:
     WindowData& frWData;
+
+    const int NStations = 12; // set in constructor
 
     const int maxNeighOrderPrim_        = 20;  // def - 20
     const int maxNeighOrderAllPrim_     = 25;  // def - 25

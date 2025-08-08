@@ -160,7 +160,9 @@ namespace cbm::algo::ca
         PrepareCAIteration(*iter, wData, iter == caIterations.begin());
         frMonitorData.StopTimer(ETimer::PrepareIteration);
 
+        frMonitorData.StartTimer(ETimer::GNNTracking);
         GNNTrackFinder(wData, iter_num);
+        frMonitorData.StopTimer(ETimer::GNNTracking);
 
         iter_num++;
 
@@ -925,7 +927,7 @@ namespace cbm::algo::ca
     // Argument to run classifier is:
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
-      case 0: graphConstructor.FindFastPrim(2); break;
+      case 0: graphConstructor.FindFastPrim(0); break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;
     }
 
