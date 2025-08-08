@@ -928,7 +928,7 @@ namespace cbm::algo::ca
     // Argument to run classifier is:
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
-      case 0: graphConstructor.FindFastPrim(0); break;
+      case 0: graphConstructor.FindFastPrim(2); break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;
     }
 

@@ -30,7 +30,7 @@ namespace cbm::algo::ca
     /// -- FUNCTIONS
     void FindFastPrim(const int mode);
 
-    void CreateTracksTriplets(const int mode);
+    void CreateTracksTriplets(const int mode, const int GNNIteration);
 
     void SaveAllEdgesAsTracks();
 
@@ -73,7 +73,7 @@ namespace cbm::algo::ca
     const int maxNeighOrderSecJump_ = 10;  // def - 10 decent
 
     // Candidate classifier parameters
-    const bool useCandClassifier_        = true;
+    const bool useCandClassifier_        = false;
     const float CandClassifierThreshold_ = 0.5f;
   };
 }  // namespace cbm::algo::ca

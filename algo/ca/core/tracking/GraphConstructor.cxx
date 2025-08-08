@@ -128,12 +128,497 @@ namespace cbm::algo::ca
       SaveAllTripletsAsTracks();
     }
     else {
-      CreateTracksTriplets(mode);
+      CreateTracksTriplets(mode, 0);
     }
   }  // FindFastPrim
 
   /// combine overlapping triplets to form tracks. sort by length and score for competition
-  void GraphConstructor::CreateTracksTriplets(const int mode) {}  // CreateTracksTriplets
+  void GraphConstructor::CreateTracksTriplets(const int mode, const int GNNIteration)
+  {
+    tracks.clear();
+    tracks.reserve(10000000);  // optimized for track mode
+
+    std::vector<std::vector<int>> tracklets;
+    tracklets.reserve(10000000);
+    std::vector<float> trackletScores;
+    trackletScores.reserve(10000000);
+    std::vector<std::vector<float>> trackletFitParams;  // store fit params of last triplet added to tracklet
+    trackletFitParams.reserve(10000000);
+
+    /// add all triplets as tracklets
+    for (int i = 0; i < (int) triplets_.size(); i++) {
+      tracklets.push_back(triplets_[i]);
+      trackletScores.push_back(tripletScores_[i]);
+      trackletFitParams.push_back(tripletFitParams_[i]);
+    }
+
+    /// organize triplets by station
+    std::vector<std::vector<std::vector<int>>> tripletsByStation(NStations);
+    std::vector<std::vector<float>> tripletsScore(NStations);
+    std::vector<std::vector<std::vector<float>>> tripletsFitParams(NStations);
+    for (int i = 0; i < (int) triplets_.size(); i++) {
+      const int sta = frWData.Hit(triplets_[i][0]).Station();
+      tripletsByStation[sta].push_back(triplets_[i]);
+      tripletsScore[sta].push_back(tripletScores_[i]);
+      tripletsFitParams[sta].push_back(tripletFitParams_[i]);
+    }
+
+    constexpr float degree_to_rad = 3.14159 / 180.0;
+    double angle1YZ, angle2YZ, angleDiffYZ1, angle1XZ, angle2XZ, angleDiffXZ1;
+    double angle3YZ, angle4YZ, angleDiffYZ2, angle3XZ, angle4XZ, angleDiffXZ2;
+    double angleDiffYZ, angleDiffXZ;
+    float YZ_cut, XZ_cut_neg_min, XZ_cut_neg_max, XZ_cut_pos_min, XZ_cut_pos_max;
+    float YZ_cut_jump, XZ_cut_neg_min_jump, XZ_cut_neg_max_jump, XZ_cut_pos_min_jump, XZ_cut_pos_max_jump = 0.0f;
+    // cuts from distribution figures for overlapping triplets
+    switch (GNNIteration) {
+      case 0:  // fastPrim
+        YZ_cut         = 3.0f * degree_to_rad;
+        XZ_cut_neg_min = -2.0f * degree_to_rad;
+        XZ_cut_neg_max = 2.0f * degree_to_rad;
+        XZ_cut_pos_min = -2.0f * degree_to_rad;
+        XZ_cut_pos_max = 2.0f * degree_to_rad;
+        break;
+      case 1:  // AllPrim
+        YZ_cut         = 1 * 20.0f * degree_to_rad;
+        XZ_cut_neg_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_neg_max = 1 * 10.0f * degree_to_rad;
+        XZ_cut_pos_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_pos_max = 1 * 10.0f * degree_to_rad;
+        // jump cuts
+        YZ_cut_jump         = 5.0f * degree_to_rad;   // def - 5
+        XZ_cut_neg_min_jump = -5.0f * degree_to_rad;  // def - -5
+        XZ_cut_neg_max_jump = 5.0f * degree_to_rad;   // def - 5
+        XZ_cut_pos_min_jump = -5.0f * degree_to_rad;  // def - -5
+        XZ_cut_pos_max_jump = 5.0f * degree_to_rad;   // def - 5
+        break;
+      case 3:  // sec
+        /// loose cuts
+        YZ_cut         = 1 * 20.0f * degree_to_rad;
+        XZ_cut_neg_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_neg_max = 1 * 10.0f * degree_to_rad;
+        XZ_cut_pos_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_pos_max = 1 * 10.0f * degree_to_rad;
+        // jump cuts
+        YZ_cut_jump         = 5.0f * degree_to_rad;   // def - 5
+        XZ_cut_neg_min_jump = -5.0f * degree_to_rad;  // def - -5
+        XZ_cut_neg_max_jump = 5.0f * degree_to_rad;   // def - 5
+        XZ_cut_pos_min_jump = -5.0f * degree_to_rad;  // def - -5
+        XZ_cut_pos_max_jump = 5.0f * degree_to_rad;   // def - 5
+        break;
+      default:
+        LOG(info) << "[CreateTracksTriplets]Unknown iteration index: " << GNNIteration;
+        YZ_cut         = 1 * 20.0f * degree_to_rad;
+        XZ_cut_neg_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_neg_max = 1 * 10.0f * degree_to_rad;
+        XZ_cut_pos_min = 1 * -10.0f * degree_to_rad;
+        XZ_cut_pos_max = 1 * 10.0f * degree_to_rad;
+        break;
+    }
+
+    /// go over every tracklet and see if it can be extended with overlapping triplet
+    for (int iTracklet = 0; iTracklet < (int) tracklets.size(); ++iTracklet) {
+      // for (int iTracklet = 0; iTracklet < numTriplets; ++iTracklet) {
+
+      const auto& tracklet = tracklets[iTracklet];
+      int length           = tracklet.size();
+      int middleSta        = frWData.Hit(tracklet[length - 2]).Station();
+      const bool isJumpTripletLast =
+        (frWData.Hit(tracklet[length - 1]).Station() - frWData.Hit(tracklet[length - 3]).Station()) == 3;
+
+      for (int iTriplet = 0; iTriplet < (int) tripletsByStation[middleSta].size(); ++iTriplet) {
+        // check overlapping triplet
+        if (tracklet[length - 2] != tripletsByStation[middleSta][iTriplet][0]) continue;
+        if (tracklet[length - 1] != tripletsByStation[middleSta][iTriplet][1]) continue;
+
+        /// check difference of angle difference between triplets in XZ and YZ
+        const auto& h1 = frWData.Hit(tracklet[length - 3]);
+        const auto& h2 = frWData.Hit(tracklet[length - 2]);
+        const auto& h3 = frWData.Hit(tracklet[length - 1]);
+        const auto& h4 = frWData.Hit(tripletsByStation[middleSta][iTriplet][2]);
+
+        // YZ angle 1
+        angle1YZ     = std::atan2(h2.Y() - h1.Y(), h2.Z() - h1.Z());
+        angle2YZ     = std::atan2(h3.Y() - h2.Y(), h3.Z() - h2.Z());
+        angleDiffYZ1 = angle1YZ - angle2YZ;
+        // XZ angle 1
+        angle1XZ     = std::atan2(h2.X() - h1.X(), h2.Z() - h1.Z());
+        angle2XZ     = std::atan2(h3.X() - h2.X(), h3.Z() - h2.Z());
+        angleDiffXZ1 = angle1XZ - angle2XZ;
+        // YZ angle 2
+        angle3YZ     = std::atan2(h3.Y() - h2.Y(), h3.Z() - h2.Z());
+        angle4YZ     = std::atan2(h4.Y() - h3.Y(), h4.Z() - h3.Z());
+        angleDiffYZ2 = angle3YZ - angle4YZ;
+        // XZ angle 2
+        angle3XZ     = std::atan2(h3.X() - h2.X(), h3.Z() - h2.Z());
+        angle4XZ     = std::atan2(h4.X() - h3.X(), h4.Z() - h3.Z());
+        angleDiffXZ2 = angle3XZ - angle4XZ;
+
+        angleDiffYZ = angleDiffYZ1 - angleDiffYZ2;
+        angleDiffXZ = angleDiffXZ1 - angleDiffXZ2;
+
+        /// atan2 returns result in radians!
+
+        if (isJumpTripletLast) {  // last triplet of tracklet is jump triplet
+          // YZ cut
+          if (angleDiffYZ < -YZ_cut_jump || angleDiffYZ > YZ_cut_jump) continue;
+          // positive particles curve -ve in XZ and -ve particles curve +ve in XZ
+          if (angleDiffXZ1 < 0) {  // positive particles
+            if (angleDiffXZ < XZ_cut_pos_min_jump || angleDiffXZ > XZ_cut_pos_max_jump) continue;
+          }
+          else {
+            if (angleDiffXZ < XZ_cut_neg_min_jump || angleDiffXZ > XZ_cut_neg_max_jump) continue;
+          }
+        }
+        else {  // not jump triplet
+          // YZ cut
+          if (angleDiffYZ < -YZ_cut || angleDiffYZ > YZ_cut) continue;
+          // positive particles curve -ve in XZ and -ve particles curve +ve in XZ
+          if (angleDiffXZ1 < 0) {  // positive particles
+            if (angleDiffXZ < XZ_cut_pos_min || angleDiffXZ > XZ_cut_pos_max) continue;
+          }
+          else {
+            if (angleDiffXZ < XZ_cut_neg_min || angleDiffXZ > XZ_cut_neg_max) continue;
+          }
+        }
+
+        // check momentum compatibility of overlapping triplets
+        const auto& oldFitParams = trackletFitParams[iTracklet];  // [chi2, qp, Cqp, Tx, C22, Ty, C33]
+        const auto& newFitParams = tripletsFitParams[middleSta][iTriplet];
+        // check qp compatibility
+        float dqp = oldFitParams[1] - newFitParams[1];
+        float Cqp = oldFitParams[2] + newFitParams[2];
+
+        if (!std::isfinite(dqp)) continue;
+        if (!std::isfinite(Cqp)) continue;
+
+        float qpchi2Cut = 10.0f;                // def - 10.0f
+        if (GNNIteration == 1) qpchi2Cut = 5;   // def - 5
+        if (GNNIteration == 3) qpchi2Cut = 10;  // def - 10
+        if (dqp * dqp > qpchi2Cut * Cqp) continue;
+
+        /// new score should have component of how well the triplets match in momentum
+        float newScore = trackletScores[iTracklet] + tripletsScore[middleSta][iTriplet];
+        newScore += dqp * dqp / Cqp;  // add momentum chi2 to score
+
+        // create new tracklet with last hit of triplet added
+        std::vector<int> newTracklet = tracklet;
+        newTracklet.push_back(tripletsByStation[middleSta][iTriplet][2]);
+        tracklets.push_back(newTracklet);
+        trackletScores.push_back(newScore);
+        trackletFitParams.push_back(newFitParams);
+      }
+    }
+
+    LOG(info) << "Num tracks constructed: " << tracklets.size();
+
+    const int min_length = 4;
+    // for iter 1. No fitting
+    if (GNNIteration == 0 || GNNIteration == 1) {
+      // min length condition
+      for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {
+        if (tracklets[itracklet].size() >= min_length) {
+          trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
+        }
+      }
+      LOG(info) << "[iter 0] Num candidate tracks with length > 4 : " << trackAndScores.size();
+
+      /// remove tracks with chi2 > max_chi2. where max_chi2 is 10*(2*hits - 5) //@TODO: check this
+      float trackChi2Cut = 10.0f;                   // When not fitting candidates and using q/p proxy to chi2.
+      if (GNNIteration == 0) trackChi2Cut = 10.0f;  // def - 10
+      if (GNNIteration == 1) trackChi2Cut = 5.0f;   // def -
+      for (int iTrack = 0; iTrack < (int) trackAndScores.size(); iTrack++) {
+        if (trackAndScores[iTrack].second > trackChi2Cut * (trackAndScores[iTrack].first.size() - 2)) {
+          trackAndScores.erase(trackAndScores.begin() + iTrack);
+          iTrack--;
+        }
+      }
+      LOG(info) << "[iter 0] Num tracks after tracks chi2 cut: " << trackAndScores.size();
+    }
+    // else if (GNNIteration == 3) {  // iter 3
+    //   // min length condition
+    //   auto trackletsTmp = tracklets;
+    //   tracklets.clear();
+    //   tracklets.reserve(10000);
+    //   auto trackletScoresTmp = trackletScores;
+    //   trackletScores.clear();
+    //   trackletScores.reserve(10000);
+    //   for (int itracklet = 0; itracklet < (int) trackletsTmp.size(); itracklet++) {
+    //     if (trackletsTmp[itracklet].size() >= min_length) {
+    //       tracklets.push_back(trackletsTmp[itracklet]);
+    //       trackletScores.push_back(trackletScoresTmp[itracklet]);
+    //     }
+    //   }
+    //   LOG(info) << "[iter 3] Num candidate tracks with length > 4: " << tracklets.size();
+
+    //   // FitTracklets(tracklets, trackletScores, trackletFitParams);  // scores is chi2 here.
+
+    //   // if (useCandClassifier_) {
+    //   //   LOG(info) << "[iter 3] Using candidate classifier...";
+    //   //   std::vector<int> CandClassTopology = {13, 32, 32, 32, 1};
+    //   //   CandClassifier CandFinder          = CandClassifier(CandClassTopology);
+    //   //   CandFinder.setTestThreshold(CandClassifierThreshold_);
+
+    //   //   std::string srcDir       = "/u/otyagi/cbmroot/NN/";
+    //   //   std::string fNameWeights = srcDir + "models/CandClassifier/CandClassWeights_13.txt";
+    //   //   std::string fNameBiases  = srcDir + "models/CandClassifier/CandClassBiases_13.txt";
+    //   //   CandFinder.loadModel(fNameWeights, fNameBiases);
+
+    //   //   const float chi2Scaling = 50.0f;  // def - 50
+    //   //   Matrix allCands_ndfSelected;
+    //   //   std::vector<int> ndfSelected_id_in_tracklets;
+    //   //   // input to candidate classifier [chi2, tx, ty, qp, C00, C11, C22, C33, C44, ndf, x, y, z]
+    //   //   for (std::size_t iCand = 0; iCand < tracklets.size(); iCand++) {
+    //   //     const auto& Cand          = tracklets[iCand];
+    //   //     const auto& CandfitParams = trackletFitParams[iCand];
+    //   //     if (Cand.size() > 6) {  // add to trackAndScores directly if ndf > 7
+    //   //       trackAndScores.push_back(std::make_pair(Cand, trackletScores[iCand]));
+    //   //     }
+    //   //     else {  // pass to candidate classifier
+    //   //       std::vector<float> cand{CandfitParams};
+    //   //       cand[0] /= chi2Scaling;  // chi2 scaling
+    //   //       cand[4] *= 1e5;
+    //   //       cand[5] *= 1e3;
+    //   //       cand[6] *= 1e2;
+    //   //       cand[7] *= 1e2;
+    //   //       cand[9] /= 10.0f;   // ndf
+    //   //       cand[10] /= 50.0f;  // x
+    //   //       cand[11] /= 50.0f;  // y
+    //   //       cand[12] += 44.0f;  // z shift
+    //   //       cand[12] /= 50.0f;  // z scale
+
+    //   //       allCands_ndfSelected.push_back(cand);
+    //   //       ndfSelected_id_in_tracklets.push_back(iCand);
+    //   //     }
+    //   //   }
+
+    //     if (allCands_ndfSelected.size() == 0) {
+    //       LOG(info) << "[iter 3] No candidate tracks to classify!";
+    //       return;
+    //     }
+    //     std::vector<int> trueCandsIndex;    // index in allCands of true Candidates
+    //     std::vector<float> trueCandsScore;  // score of true edges
+    //     CandFinder.run(allCands_ndfSelected, trueCandsIndex, trueCandsScore);
+
+    //     // add trueCandsIndex to trackAndScores
+    //     for (std::size_t iCand = 0; iCand < trueCandsIndex.size(); iCand++) {
+    //       const auto& Cand = tracklets[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];
+    //       float score      = trackletScores[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];  // chi2
+    //       // float score = trueCandsScore[iCand];  // classifier score
+    //       trackAndScores.push_back(std::make_pair(Cand, score));
+    //     }
+    //     LOG(info) << "[iter 3] Num candidate tracks after fitting and classifier filtering: " << trackAndScores.size();
+    //   }
+    //   else {
+    //     LOG(info) << "[iter 3] No candidate classifier used!";
+    //     for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {
+    //       trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
+    //     }
+    //     LOG(info) << "[iter 3] Num candidate tracks after fitting: " << trackAndScores.size();
+    //   }
+    // }
+
+    if (mode == 2) {  // do track competition
+
+      /// sort tracks by length and lower scores (chi2) first
+      std::sort(trackAndScores.begin(), trackAndScores.end(),
+                [](const std::pair<std::vector<int>, float>& a, const std::pair<std::vector<int>, float>& b) {
+                  if (a.first.size() == b.first.size()) {
+                    return a.second < b.second;
+                  }
+                  return a.first.size() > b.first.size();
+                });
+      LOG(info) << "Tracks sorted.";
+
+      // #define STANDARD_COMP  // use for no jump iteration results
+// #define BEGGAR_COMP  // also good.
+#define ALTRUISTIC_COMP  // currently used
+
+#ifdef STANDARD_COMP
+      /// go from longest to shortest tracks. Mark used hit strips, remove tracks with used hit strips
+      for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
+        /// check that all hits are not used
+        const auto& track = trackAndScores[iTrack].first;
+        bool remove       = false;
+        for (const auto& hit : track) {
+          if (fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].FrontKey()]
+              || fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].BackKey()]) {
+            trackAndScores.erase(trackAndScores.begin() + iTrack);
+            iTrack--;
+            remove = true;
+            break;
+          }
+        }
+        if (remove) continue;
+        /// mark all hits as used
+        for (const auto& hit : track) {
+          fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].FrontKey()] = 1;
+          fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].BackKey()]  = 1;
+        }
+      }
+#endif  // STANDARD_COMP
+
+#ifdef BEGGAR_COMP
+      /// beggar method of track competition
+      for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
+        /// check that all hits are not used
+        const auto& track       = trackAndScores[iTrack].first;
+        bool remove             = false;
+        uint usedHits           = 0;
+        int usedHitID           = -1;
+        int usedHitIndexInTrack = -1;
+        for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
+          int hit = track[iHit];
+          if (fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].FrontKey()]
+              || fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].BackKey()]) {
+            usedHits++;
+            usedHitID           = hit;
+            usedHitIndexInTrack = iHit;
+          }
+        }
+        if (usedHits == 1) {  // 'beg' for hit from longer accepted track
+          bool begged = false;
+          for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {
+            if (trackAndScores[iBeg].first.size() <= trackAndScores[iTrack].first.size())
+              continue;                                        // only beg from longer tracks
+            if (trackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
+            if (trackAndScores[iBeg].second < trackAndScores[iTrack].second)
+              continue;  // dont donate to higher chi2 beggar
+
+            auto& begTrack = trackAndScores[iBeg].first;
+            for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
+              const auto begHit = begTrack[iBegHit];
+              if (begHit == usedHitID) continue;  // dont let exact hit be borrowed.
+              if (fAlgo->fWindowHits[begHit].FrontKey() == fAlgo->fWindowHits[usedHitID].FrontKey()
+                  || fAlgo->fWindowHits[begHit].BackKey()
+                       == fAlgo->fWindowHits[usedHitID].BackKey()) {  // only one track will match
+                // remove iBegHit from begTrack
+                begTrack.erase(begTrack.begin() + iBegHit);
+                // reset hit flags. Will be reset by beggar
+                fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[begHit].FrontKey()] = 0;
+                fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[begHit].BackKey()]  = 0;
+
+                begged = true;  // stop begging.
+                remove = false;
+                break;
+              }
+            }
+            if (begged) break;
+            remove = true;  // remove track if begging not successful
+          }
+        }
+        else if (usedHits > 1) {  // remove track with more than one hit used
+          remove = true;
+        }
+
+        if (remove) {
+          trackAndScores.erase(trackAndScores.begin() + iTrack);
+          iTrack--;
+          continue;
+        }
+        /// mark all hits as used
+        for (const auto& hit : track) {
+          fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].FrontKey()] = 1;
+          fAlgo->fvHitKeyFlags[fAlgo->fWindowHits[hit].BackKey()]  = 1;
+        }
+      }
+#endif  // BEGGAR_COMP
+
+#ifdef ALTRUISTIC_COMP
+      /// --- TEST ---
+      for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
+        /// check that all hits are not used
+        auto& track    = trackAndScores[iTrack].first;
+        bool remove    = false;
+        uint nUsedHits = 0;
+        std::vector<int> usedHitIDs;
+        std::vector<int> usedHitIndexesInTrack;
+        for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
+          const ca::Hit& hit = frWData.Hit(track[iHit]);
+          if (frWData.IsHitKeyUsed(hit.FrontKey()) || frWData.IsHitKeyUsed(hit.BackKey())) {
+            nUsedHits++;
+            usedHitIDs.push_back(track[iHit]);
+            usedHitIndexesInTrack.push_back(iHit);
+          }
+        }
+        if (nUsedHits == 0) {  // clean tracks
+          /// mark all hits as used
+          for (const auto& hit : track) {
+            frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+            frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+          }
+          continue;  // go next track
+        }
+        else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
+          if (track.size() - nUsedHits >= 4) {
+            // remove used hits.
+            // read usedHitIndexes in reverse order
+            std::sort(usedHitIndexesInTrack.begin(), usedHitIndexesInTrack.end(), std::greater<int>());
+            for (const auto usedHitIndex : usedHitIndexesInTrack) {
+              track.erase(track.begin() + usedHitIndex);
+            }
+            // mark remaining hits as used
+            for (const auto& hit : track) {
+              frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+              frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+            }
+            continue;  // go next track
+          }
+          else {
+            remove = true;  // remove track if begging not successful
+          }
+        }
+
+        if (remove
+            && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
+          for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
+            if (trackAndScores[iBeg].first.size() <= trackAndScores[iTrack].first.size())
+              continue;                                        // only beg from longer tracks
+            if (trackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
+            if (trackAndScores[iBeg].second < trackAndScores[iTrack].second)
+              continue;  // dont donate to higher chi2 beggar
+
+            auto& begTrack = trackAndScores[iBeg].first;
+            for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
+              const auto begHit = begTrack[iBegHit];
+              if (begHit == usedHitIDs[0]) continue;  // dont let exact hit be borrowed.
+              if (frWData.Hit(begHit).FrontKey() == frWData.Hit(usedHitIDs[0]).FrontKey()
+                  || frWData.Hit(begHit).BackKey()
+                       == frWData.Hit(usedHitIDs[0]).BackKey()) {  // only one track will match
+                // remove iBegHit from begTrack
+                begTrack.erase(begTrack.begin() + iBegHit);
+                // reset hit flags. Will be reset by beggar
+                frWData.IsHitKeyUsed(frWData.Hit(begHit).FrontKey()) = 0;
+                frWData.IsHitKeyUsed(frWData.Hit(begHit).BackKey())  = 0;
+
+                remove = false;
+                break;
+              }
+            }
+          }
+        }
+
+        if (remove) {
+          trackAndScores.erase(trackAndScores.begin() + iTrack);
+          iTrack--;
+          continue;
+        }
+        /// mark all hits as used
+        for (const auto& hit : track) {
+          frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+          frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+        }
+      }
+#endif  // ALTRUISTIC_COMP
+
+    }  // track competition
+
+    // save tracks
+    for (int iTrack = 0; iTrack < (int) trackAndScores.size(); iTrack++) {
+      tracks.push_back(trackAndScores[iTrack].first);
+    }
+
+    LOG(info) << "Num tracks after cleaning: " << tracks.size();
+  }  // CreateTracksTriplets
 
   void GraphConstructor::FitTriplets(const int GNNiteration)
   {
@@ -152,15 +637,15 @@ namespace cbm::algo::ca
 
     for (const auto& trip : triplets_) {
       for (const auto& hit : trip) {
-        int hitID = frWData.Hit(hit).Id(); // index in InputData
+        int hitID = frWData.Hit(hit).Id();  // index in InputData
         GNNTripletHits.push_back(hitID);
       }
       Track t;
       t.fNofHits = trip.size();
       GNNTripletCandidates.push_back(t);
     }
-    frTrackFitter.FitGNNTriplets(frInput, frWData, GNNTripletCandidates, GNNTripletHits, selectedTripletIndexes, selectedTripletScores,
-                                selectedTripletFitParams, GNNiteration);
+    frTrackFitter.FitGNNTriplets(frInput, frWData, GNNTripletCandidates, GNNTripletHits, selectedTripletIndexes,
+                                 selectedTripletScores, selectedTripletFitParams, GNNiteration);
     LOG(info) << "Candidate triplets fitted with KF.";
 
     /// remove from tripletScores_ and triplets_, triplets that not selected by KF
