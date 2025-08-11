@@ -19,6 +19,7 @@ namespace cbm::algo::ca
   }
 
   struct XpuTimings {
+    // CA time monitors
     xpu::timings PrepareData_time[4];
     xpu::timings MakeSinglets_time[4];
     xpu::timings MakeDoublets_time[4];
@@ -31,6 +32,10 @@ namespace cbm::algo::ca
     xpu::timings FitTriplets_time[4];
     xpu::timings SortTriplets_time[4];
     xpu::timings Total_time[4];
+
+    // Gnn time monitors
+    xpu::timings MetricLearning_time[4];
+
     int nIterations;
 
     void PrintTimings(int iteration) const
@@ -59,6 +64,9 @@ namespace cbm::algo::ca
       print_timing("FitTriplets_time", FitTriplets_time[iteration]);
       print_timing("SortTriplets_time", SortTriplets_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
+
+      print_timing("MetricLearning_time", MetricLearning_time[iteration]);
+
     }
   };
 
@@ -96,6 +104,8 @@ namespace cbm::algo::ca
     xpu::timings GetFitTripletsTime(int ev, int it) { return xpuTimings[ev].FitTriplets_time[it]; }
 
     xpu::timings GetTotalTime(int ev, int it) { return xpuTimings[ev].Total_time[it]; }
+
+    xpu::timings GetMetricLearningTime(int ev, int it) { return xpuTimings[ev].MetricLearning_time[it]; }
 
    private:
     std::vector<XpuTimings> xpuTimings;

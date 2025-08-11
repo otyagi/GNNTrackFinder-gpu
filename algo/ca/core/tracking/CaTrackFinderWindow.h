@@ -20,7 +20,7 @@
 #include "CaTrackingMonitor.h"
 #include "CaVector.h"
 #include "CaWindowData.h"
-
+#include "GnnGpuTrackFinderSetup.h"
 #include "GraphConstructor.h"
 
 namespace cbm::algo::ca
@@ -96,6 +96,8 @@ namespace cbm::algo::ca
     void SetupGpuTrackFinder(GpuTrackFinderSetup& gpuTrackFinderSetup);
 
     void ConstructTripletsGPU(WindowData& wData, GpuTrackFinderSetup& gpuTrackFinderSetup, int iteration);
+
+    void SetupGnnGpuTrackFinder(GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup);
 
     void GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration, TrackFitter& fTrackFitter);
 

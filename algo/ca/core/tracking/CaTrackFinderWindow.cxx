@@ -128,8 +128,10 @@ namespace cbm::algo::ca
     frMonitorData.StopTimer(ETimer::PrepareGrid);
 
     std::optional<ca::GpuTrackFinderSetup> gpuTrackFinderSetup;
+    std::optional<ca::GnnGpuTrackFinderSetup> GnnGpuTrackFinderSetup;
     size_t iter_num = 0;
-    if constexpr (constants::gpu::GpuTracking) {
+
+    if constexpr (constants::gpu::GnnGpuTracking) {  // GNN GPU tracking
       // XPU initialization
       // - temporary solution for tests only
       // - should not be initialized here
@@ -142,16 +144,37 @@ namespace cbm::algo::ca
 
       // Set up environment for GPU tracking
       xpu::push_timer("gpuTFinit");
-      gpuTrackFinderSetup.emplace(wData, fParameters);
+      GnnGpuTrackFinderSetup.emplace(wData, fParameters);
       xpu::timings gpuTFinit = xpu::pop_timer();
       if constexpr (constants::gpu::GpuTimeMonitoring) {
         LOG(info) << "GPU tracking :: Initialization: " << gpuTFinit.wall() << " ms";
       }
+      SetupGnnGpuTrackFinder(GnnGpuTrackFinderSetup.value());
+    }
+    else {  // CA GPU Tracking
+      if constexpr (constants::gpu::GpuTracking) {
+        // XPU initialization
+        // - temporary solution for tests only
+        // - should not be initialized here
+        setenv("XPU_PROFILE", "1", 1);
+        xpu::settings settings;
+        //      settings.device = "cpu0";
+        settings.device = "hip0";
+        //      settings.verbose = true;
+        xpu::initialize(settings);
 
-      SetupGpuTrackFinder(gpuTrackFinderSetup.value());
+        // Set up environment for GPU tracking
+        xpu::push_timer("gpuTFinit");
+        gpuTrackFinderSetup.emplace(wData, fParameters);
+        xpu::timings gpuTFinit = xpu::pop_timer();
+        if constexpr (constants::gpu::GpuTimeMonitoring) {
+          LOG(info) << "GPU tracking :: Initialization: " << gpuTFinit.wall() << " ms";
+        }
+        SetupGpuTrackFinder(gpuTrackFinderSetup.value());
+      }
     }
 
-    if (constants::gpu::GNNTracking) {  // Run GNN tracking
+    if (constants::gpu::GnnTracking) {  // Run GNN tracking
       frMonitorData.StartTimer(ETimer::FindTracks);
       auto& caIterations = fParameters.GetCAIterations();
       for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
@@ -161,7 +184,14 @@ namespace cbm::algo::ca
         frMonitorData.StopTimer(ETimer::PrepareIteration);
 
         frMonitorData.StartTimer(ETimer::GNNTracking);
-        GNNTrackFinder(input, wData, iter_num, fTrackFitter);
+        if constexpr (constants::gpu::GnnGpuTracking) {
+          // triplets on gpu
+          // rest on cpu in track finder class
+          continue;
+        }
+        else {
+          GNNTrackFinder(input, wData, iter_num, fTrackFitter);
+        }
         frMonitorData.StopTimer(ETimer::GNNTracking);
 
         iter_num++;
@@ -917,6 +947,29 @@ namespace cbm::algo::ca
       }
     }
   }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  void TrackFinderWindow::SetupGnnGpuTrackFinder(GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup)
+  {
+    xpu::push_timer("SetupParametersTime");
+    GnnGpuTrackFinderSetup.SetupParameters();
+    xpu::timings SetupParametersTime = xpu::pop_timer();
+
+    xpu::push_timer("SetInputDataTime");
+    GnnGpuTrackFinderSetup.SetInputData();
+    xpu::timings SetInputDataTime = xpu::pop_timer();
+
+    xpu::push_timer("SetupMaterialMapTime");
+    GnnGpuTrackFinderSetup.SetupMaterialMap();
+    xpu::timings SetupMaterialMapTime = xpu::pop_timer();
+
+    if constexpr (constants::gpu::GpuTimeMonitoring) {
+      LOG(info) << "GPU tracking :: SetupParameters: " << SetupParametersTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: SetInputData: " << SetInputDataTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: SetupMaterialMap: " << SetupMaterialMapTime.wall() << " ms";
+    }
+  }
+
 
   // -------------------------------------------------------------------------------------------------------------------
   void TrackFinderWindow::GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration,
