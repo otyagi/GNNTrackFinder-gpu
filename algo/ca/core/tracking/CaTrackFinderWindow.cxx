@@ -165,7 +165,6 @@ namespace cbm::algo::ca
         frMonitorData.StopTimer(ETimer::GNNTracking);
 
         iter_num++;
-
       }  // ---- Loop over Track Finder iterations: END ----//
       frMonitorData.StopTimer(ETimer::FindTracks);
     }

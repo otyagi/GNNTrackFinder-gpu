@@ -76,6 +76,7 @@ namespace cbm::algo::ca
     }
     LOG(info) << "Num true edges after removing displaced edges: " << nEdgesFound;
 
+    // To save doublets as tracks
     // SaveAllEdgesAsTracks();
     // return;
 
@@ -674,6 +675,9 @@ namespace cbm::algo::ca
     for (const auto& track : tracks) {
       for (const auto& iHit : track) {
         const ca::Hit& hit = frWData.Hit(iHit);
+        // used strips are marked
+        frWData.IsHitKeyUsed(hit.FrontKey()) = 1;
+        frWData.IsHitKeyUsed(hit.BackKey())  = 1;
         frWData.RecoHitIndices().push_back(hit.Id());
       }
       Track t;

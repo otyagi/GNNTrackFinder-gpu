@@ -70,19 +70,19 @@ namespace cbm::algo::ca
               SearchNeighbours,
               CreateTracks,
               SuppressHitKeys,
+              GNNTracking,
+              MetricLearning,
+              NearestNeighbours,
+              TripletConstruction,
+              TripletFit,
+              TrackCandidate,
+              TrackCompetition,
             FitTracks,
             MergeClones,
           StoreTracksWindow,
         StoreTracksFinal,
       Qa,
-    END,
-    GNNTracking,
-    MetricLearning,
-    NearestNeighbours,
-    TripletConstruction,
-    TripletFit,
-    TrackCandidate,
-    TrackCompetition
+    END
   };
   /* clang-format on */
 
