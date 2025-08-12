@@ -4,7 +4,7 @@
 
 /// \file GpuTimeMonitor.h
 ///
-/// \brief Time monitor for GPU kernels within the CA algorithm
+/// \brief Time monitor for GPU kernels within the CA and GNN algorithm
 
 #pragma once  // include this header only once per compilation unit
 
@@ -34,7 +34,8 @@ namespace cbm::algo::ca
     xpu::timings Total_time[4];
 
     // Gnn time monitors
-    xpu::timings MetricLearning_time[4];
+    xpu::timings EmbedHits_time[4];
+    xpu::timings NearestNeighbours_time[4];
 
     int nIterations;
 
@@ -65,7 +66,8 @@ namespace cbm::algo::ca
       print_timing("SortTriplets_time", SortTriplets_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
 
-      print_timing("MetricLearning_time", MetricLearning_time[iteration]);
+      print_timing("EmbedHits_time", EmbedHits_time[iteration]);
+      print_timing("NearestNeighbours_time", NearestNeighbours_time[iteration]);
 
     }
   };
@@ -105,7 +107,10 @@ namespace cbm::algo::ca
 
     xpu::timings GetTotalTime(int ev, int it) { return xpuTimings[ev].Total_time[it]; }
 
-    xpu::timings GetMetricLearningTime(int ev, int it) { return xpuTimings[ev].MetricLearning_time[it]; }
+    xpu::timings GetEmbedHitsTime(int ev, int it) { return xpuTimings[ev].EmbedHits_time[it]; }
+
+    xpu::timings GetNearestNeightboursTime(int ev, int it) { return xpuTimings[ev].NearestNeighbours_time[it]; }
+
 
    private:
     std::vector<XpuTimings> xpuTimings;

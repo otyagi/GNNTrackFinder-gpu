@@ -20,69 +20,69 @@ void GnnGpuTrackFinderSetup::SetupParameters()
 {
   int nStations   = fParameters.GetNstationsActive();
   int nIterations = fParameters.GetCAIterations().size();
-  fTripletConstructor.fParams.reset(nIterations, xpu::buf_io);
-  xpu::h_view vfParams{fTripletConstructor.fParams};
+  fGraphConstructor.fParams.reset(nIterations, xpu::buf_io);
+  xpu::h_view vfParams{fGraphConstructor.fParams};
 
   for (int i = 0; i < nIterations; i++) {
-    GpuParameters gpuParams              = fParameters;
-    fTripletConstructor.fParams_const[i] = fParameters;
-    const auto& caIteration              = fParameters.GetCAIterations()[i];
+    GpuParameters gpuParams            = fParameters;
+    fGraphConstructor.fParams_const[i] = fParameters;
+    const auto& caIteration            = fParameters.GetCAIterations()[i];
 
-    gpuParams.fNStations                            = nStations;
-    gpuParams.maxSlopePV                            = caIteration.GetMaxSlopePV();
-    gpuParams.maxQp                                 = caIteration.GetMaxQp();
-    gpuParams.maxDZ                                 = caIteration.GetMaxDZ();
-    fTripletConstructor.fParams_const[i].fNStations = nStations;
-    fTripletConstructor.fParams_const[i].maxSlopePV = caIteration.GetMaxSlopePV();
-    fTripletConstructor.fParams_const[i].maxQp      = caIteration.GetMaxQp();
-    fTripletConstructor.fParams_const[i].maxDZ      = caIteration.GetMaxDZ();
+    gpuParams.fNStations                          = nStations;
+    gpuParams.maxSlopePV                          = caIteration.GetMaxSlopePV();
+    gpuParams.maxQp                               = caIteration.GetMaxQp();
+    gpuParams.maxDZ                               = caIteration.GetMaxDZ();
+    fGraphConstructor.fParams_const[i].fNStations = nStations;
+    fGraphConstructor.fParams_const[i].maxSlopePV = caIteration.GetMaxSlopePV();
+    fGraphConstructor.fParams_const[i].maxQp      = caIteration.GetMaxQp();
+    fGraphConstructor.fParams_const[i].maxDZ      = caIteration.GetMaxDZ();
 
     if (caIteration.GetElectronFlag()) {
-      gpuParams.particleMass                            = constants::phys::ElectronMass;
-      fTripletConstructor.fParams_const[i].particleMass = constants::phys::ElectronMass;
+      gpuParams.particleMass                          = constants::phys::ElectronMass;
+      fGraphConstructor.fParams_const[i].particleMass = constants::phys::ElectronMass;
     }
     else {
-      gpuParams.particleMass                            = constants::phys::MuonMass;
-      fTripletConstructor.fParams_const[i].particleMass = constants::phys::MuonMass;
+      gpuParams.particleMass                          = constants::phys::MuonMass;
+      fGraphConstructor.fParams_const[i].particleMass = constants::phys::MuonMass;
     }
 
-    gpuParams.primaryFlag                            = caIteration.GetPrimaryFlag();
-    fTripletConstructor.fParams_const[i].primaryFlag = caIteration.GetPrimaryFlag();
+    gpuParams.primaryFlag                          = caIteration.GetPrimaryFlag();
+    fGraphConstructor.fParams_const[i].primaryFlag = caIteration.GetPrimaryFlag();
 
     if (caIteration.GetPrimaryFlag()) {
-      gpuParams.targB                            = fParameters.GetVertexFieldValue();
-      fTripletConstructor.fParams_const[i].targB = fParameters.GetVertexFieldValue();
+      gpuParams.targB                          = fParameters.GetVertexFieldValue();
+      fGraphConstructor.fParams_const[i].targB = fParameters.GetVertexFieldValue();
     }
     else {
-      gpuParams.targB                            = fParameters.GetStation(0).fieldSlice.GetFieldValue(0, 0);
-      fTripletConstructor.fParams_const[i].targB = fParameters.GetStation(0).fieldSlice.GetFieldValue(0, 0);
+      gpuParams.targB                          = fParameters.GetStation(0).fieldSlice.GetFieldValue(0, 0);
+      fGraphConstructor.fParams_const[i].targB = fParameters.GetStation(0).fieldSlice.GetFieldValue(0, 0);
     }
 
-    gpuParams.doubletChi2Cut                                 = caIteration.GetDoubletChi2Cut();
-    gpuParams.tripletChi2Cut                                 = caIteration.GetTripletChi2Cut();
-    gpuParams.tripletFinalChi2Cut                            = caIteration.GetTripletFinalChi2Cut();
-    gpuParams.isTargetField                                  = (fabs(gpuParams.targB.y) > 0.001);
-    fTripletConstructor.fParams_const[i].doubletChi2Cut      = caIteration.GetDoubletChi2Cut();
-    fTripletConstructor.fParams_const[i].tripletChi2Cut      = caIteration.GetTripletChi2Cut();
-    fTripletConstructor.fParams_const[i].tripletFinalChi2Cut = caIteration.GetTripletFinalChi2Cut();
+    gpuParams.doubletChi2Cut                               = caIteration.GetDoubletChi2Cut();
+    gpuParams.tripletChi2Cut                               = caIteration.GetTripletChi2Cut();
+    gpuParams.tripletFinalChi2Cut                          = caIteration.GetTripletFinalChi2Cut();
+    gpuParams.isTargetField                                = (fabs(gpuParams.targB.y) > 0.001);
+    fGraphConstructor.fParams_const[i].doubletChi2Cut      = caIteration.GetDoubletChi2Cut();
+    fGraphConstructor.fParams_const[i].tripletChi2Cut      = caIteration.GetTripletChi2Cut();
+    fGraphConstructor.fParams_const[i].tripletFinalChi2Cut = caIteration.GetTripletFinalChi2Cut();
 
     ca::MeasurementXy<float> targMeas(fParameters.GetTargetPositionX()[0], fParameters.GetTargetPositionY()[0],
                                       caIteration.GetTargetPosSigmaX() * caIteration.GetTargetPosSigmaX(),
                                       caIteration.GetTargetPosSigmaY() * caIteration.GetTargetPosSigmaX(), 0, 1, 1);
-    gpuParams.targetMeasurement                            = targMeas;
-    fTripletConstructor.fParams_const[i].targetMeasurement = targMeas;
+    gpuParams.targetMeasurement                          = targMeas;
+    fGraphConstructor.fParams_const[i].targetMeasurement = targMeas;
 
     vfParams[i] = gpuParams;
   }
 
-  fQueue.copy(fTripletConstructor.fParams, xpu::h2d);
+  fQueue.copy(fGraphConstructor.fParams, xpu::h2d);
 
   for (int ista = 0; ista < nStations; ista++) {
-    fTripletConstructor.fStations_const[ista] = fParameters.GetStation(ista);
+    fGraphConstructor.fStations_const[ista] = fParameters.GetStation(ista);
   }
 
-  xpu::set<strGpuTripletConstructor>(fTripletConstructor);
-}
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+}  // SetupParameters
 
 void GnnGpuTrackFinderSetup::SetupGrid()
 {
@@ -90,8 +90,8 @@ void GnnGpuTrackFinderSetup::SetupGrid()
   unsigned int bin_start     = 0;
   unsigned int entries_start = 0;
 
-  fTripletConstructor.fvGpuGrid.reset(nStations, xpu::buf_io);
-  xpu::h_view vfvGpuGrid{fTripletConstructor.fvGpuGrid};
+  fGraphConstructor.fvGpuGrid.reset(nStations, xpu::buf_io);
+  xpu::h_view vfvGpuGrid{fGraphConstructor.fvGpuGrid};
 
   for (unsigned int ista = 0; ista < nStations; ista++) {
     vfvGpuGrid[ista] = GpuGrid(frWData.Grid(ista), bin_start, entries_start);
@@ -99,11 +99,13 @@ void GnnGpuTrackFinderSetup::SetupGrid()
     entries_start += frWData.Grid(ista).GetEntries().size();
   }
 
-  fTripletConstructor.fgridFirstBinEntryIndex.reset(bin_start, xpu::buf_io);
-  fTripletConstructor.fgridEntries.reset(entries_start, xpu::buf_io);
+  fQueue.copy(fGraphConstructor.fvGpuGrid, xpu::h2d);
 
-  xpu::h_view vfgridFirstBinEntryIndex{fTripletConstructor.fgridFirstBinEntryIndex};
-  xpu::h_view vfgridEntries{fTripletConstructor.fgridEntries};
+  fGraphConstructor.fgridFirstBinEntryIndex.reset(bin_start, xpu::buf_io);
+  fGraphConstructor.fgridEntries.reset(entries_start, xpu::buf_io);
+
+  xpu::h_view vfgridFirstBinEntryIndex{fGraphConstructor.fgridFirstBinEntryIndex};
+  xpu::h_view vfgridEntries{fGraphConstructor.fgridEntries};
 
   bin_start = entries_start = 0;
 
@@ -118,7 +120,8 @@ void GnnGpuTrackFinderSetup::SetupGrid()
   }
   fNHits = entries_start;
 
-  fQueue.copy(fTripletConstructor.fvGpuGrid, xpu::h2d);
+  fQueue.copy(fGraphConstructor.fgridFirstBinEntryIndex, xpu::h2d);
+  fQueue.copy(fGraphConstructor.fgridEntries, xpu::h2d);
 }
 
 void GnnGpuTrackFinderSetup::SetupMaterialMap()
@@ -128,8 +131,8 @@ void GnnGpuTrackFinderSetup::SetupMaterialMap()
   int nStations  = fParameters.GetNstationsActive();
   int fstStation = 0;
   if (nStations == 8) fstStation = 4;
-  fTripletConstructor.fMaterialMap.reset(nStations, xpu::buf_io);
-  xpu::h_view vfMaterialMap{fTripletConstructor.fMaterialMap};
+  fGraphConstructor.fMaterialMap.reset(nStations, xpu::buf_io);
+  xpu::h_view vfMaterialMap{fGraphConstructor.fMaterialMap};
 
   for (int ista = 0; ista < nStations; ista++) {
     vfMaterialMap[ista] = GpuMaterialMap(fParameters.GetGeometrySetup().GetMaterial(fstStation + ista), bin_start);
@@ -137,8 +140,8 @@ void GnnGpuTrackFinderSetup::SetupMaterialMap()
                  * fParameters.GetGeometrySetup().GetMaterial(fstStation + ista).GetNbins();
   }
 
-  fTripletConstructor.fMaterialMapTables.reset(bin_start, xpu::buf_io);
-  xpu::h_view vfMaterialMapTables{fTripletConstructor.fMaterialMapTables};
+  fGraphConstructor.fMaterialMapTables.reset(bin_start, xpu::buf_io);
+  xpu::h_view vfMaterialMapTables{fGraphConstructor.fMaterialMapTables};
 
   bin_start = 0;
 
@@ -150,26 +153,26 @@ void GnnGpuTrackFinderSetup::SetupMaterialMap()
                  * fParameters.GetGeometrySetup().GetMaterial(fstStation + ista).GetNbins();
   }
 
-  fQueue.copy(fTripletConstructor.fMaterialMap, xpu::h2d);
-  fQueue.copy(fTripletConstructor.fMaterialMapTables, xpu::h2d);
-}
+  fQueue.copy(fGraphConstructor.fMaterialMap, xpu::h2d);
+  fQueue.copy(fGraphConstructor.fMaterialMapTables, xpu::h2d);
+}  // SetupMaterialMap
 
 void GnnGpuTrackFinderSetup::SetInputData()
 {
-  fTripletConstructor.fvHits.reset(frWData.Hits().size(), xpu::buf_io);
-  xpu::h_view vfvHits{fTripletConstructor.fvHits};
+  fGraphConstructor.fvHits.reset(frWData.Hits().size(), xpu::buf_io);
+  xpu::h_view vfvHits{fGraphConstructor.fvHits};
 
   std::copy_n(frWData.Hits().begin(), frWData.Hits().size(), &vfvHits[0]);
 
-  fQueue.copy(fTripletConstructor.fvHits, xpu::h2d);
-}
+  fQueue.copy(fGraphConstructor.fvHits, xpu::h2d);
+}  // SetInputData
 
 void GnnGpuTrackFinderSetup::SetupIterationData(int iter)
 {
   fIteration = iter;
 
-  fTripletConstructor.fIterationData.reset(1, xpu::buf_io);
-  xpu::h_view vfIterationData{fTripletConstructor.fIterationData};
+  fGraphConstructor.fIterationData.reset(1, xpu::buf_io);
+  xpu::h_view vfIterationData{fGraphConstructor.fIterationData};
   vfIterationData[0].fNHits             = fNHits;
   vfIterationData[0].fIteration         = iter;
   vfIterationData[0].fNDoublets         = 0;
@@ -177,10 +180,10 @@ void GnnGpuTrackFinderSetup::SetupIterationData(int iter)
   vfIterationData[0].fNTriplets         = 0;
   vfIterationData[0].fNTriplets_counter = 0;
 
-  fQueue.copy(fTripletConstructor.fIterationData, xpu::h2d);
+  fQueue.copy(fGraphConstructor.fIterationData, xpu::h2d);
 }
 
-void GnnGpuTrackFinderSetup::RunGpuTrackingSetup()
+void GnnGpuTrackFinderSetup::RunGpuTracking()
 {
   fNTriplets = 0;
 
@@ -191,7 +194,7 @@ void GnnGpuTrackFinderSetup::RunGpuTrackingSetup()
   }
 
   bool isCpu  = xpu::device::active().backend() == xpu::cpu;
-  int nBlocks = isCpu ? fNHits : std::ceil(float(fNHits) / float(kSingletConstructorBlockSize));
+  int nBlocks = isCpu ? fNHits : std::ceil(float(fNHits) / float(kEmbedHitsBlockSize));
   //nBlocks = 1;
 
   int nBlocksCD =
@@ -199,4 +202,46 @@ void GnnGpuTrackFinderSetup::RunGpuTrackingSetup()
     * constants::gpu::
       MaxDoubletsFromHit;  //std::ceil(float(nBlocks * maxDoubletsFromHit) / float(kSingletConstructorBlockSize));
 
+  //***
+  fGraphConstructor.fvTrackParams.reset(frWData.Hits().size(), xpu::buf_device);
+  //***
+  fGraphConstructor.fIteration = fIteration;
+
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    fEventTimeMonitor.nIterations = fIteration;
+    xpu::push_timer("Full_time");
+
+    xpu::push_timer("PrepareData_time");
+  }
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings pd_time                           = xpu::pop_timer();
+    fEventTimeMonitor.PrepareData_time[fIteration] = pd_time;
+
+    xpu::push_timer("EmbedHits_time");
+  }
+
+  fQueue.launch<EmbedHits>(xpu::n_blocks(nBlocks));
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings sind_time                          = xpu::pop_timer();
+    fEventTimeMonitor.EmbedHits_time[fIteration] = sind_time;
+
+    xpu::push_timer("NearestNeighbours_time");
+  }
+
+  fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
+  fGraphConstructor.fvGpuGrid.reset(0, xpu::buf_io);
+  fGraphConstructor.fgridFirstBinEntryIndex.reset(0, xpu::buf_io);
+  fGraphConstructor.fgridEntries.reset(0, xpu::buf_io);
+
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);  //TODO: check if we need to reset all the buffers here
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings t                           = xpu::pop_timer();
+    fEventTimeMonitor.Total_time[fIteration] = t;
+    fEventTimeMonitor.PrintTimings(fIteration);
+  }
 }

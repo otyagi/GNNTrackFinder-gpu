@@ -42,6 +42,8 @@ set(SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaDeviceImage.cxx
 
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/GnnGpuTrackFinderSetup.cxx
+  ${CMAKE_CURRENT_SOURCE_DIR}/experimental/GnnGpuGraphConstructor.cxx
+
 
 )
 
@@ -65,7 +67,6 @@ target_include_directories(CaCore
          ${CMAKE_CURRENT_SOURCE_DIR}/qa
          ${CMAKE_CURRENT_SOURCE_DIR}/tracking
          ${CMAKE_CURRENT_SOURCE_DIR}/experimental
-         ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
          ${CMAKE_CURRENT_SOURCE_DIR}/
 )
 
@@ -96,7 +97,6 @@ if (NOT CBM_ONLINE_STANDALONE)
            ${CMAKE_CURRENT_SOURCE_DIR}/qa
            ${CMAKE_CURRENT_SOURCE_DIR}/tracking
            ${CMAKE_CURRENT_SOURCE_DIR}/experimental
-           ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
            ${CMAKE_CURRENT_SOURCE_DIR}
   )
 
@@ -179,7 +179,7 @@ install(
     experimental/CaGpuTimeMonitor.h
 
     experimental/GnnGpuTrackFinderSetup.h
-
+    experimental/GnnGpuGraphConstructor.h
 
     DESTINATION
     include/

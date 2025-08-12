@@ -97,6 +97,8 @@ namespace cbm::algo::ca
 
     void ConstructTripletsGPU(WindowData& wData, GpuTrackFinderSetup& gpuTrackFinderSetup, int iteration);
 
+    void ConstructGnnTripletsGpu(WindowData& wData, GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup, int iteration);
+
     void SetupGnnGpuTrackFinder(GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup);
 
     void GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration, TrackFitter& fTrackFitter);

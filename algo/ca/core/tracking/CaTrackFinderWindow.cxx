@@ -185,7 +185,7 @@ namespace cbm::algo::ca
 
         frMonitorData.StartTimer(ETimer::GNNTracking);
         if constexpr (constants::gpu::GnnGpuTracking) {
-          // triplets on gpu
+          ConstructGnnTripletsGpu(wData, GnnGpuTrackFinderSetup.value(), iter_num);
           // rest on cpu in track finder class
           continue;
         }
@@ -970,6 +970,28 @@ namespace cbm::algo::ca
     }
   }
 
+  // -------------------------------------------------------------------------------------------------------------------
+  void TrackFinderWindow::ConstructGnnTripletsGpu(WindowData& wData, GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup,
+                                               int iteration)
+  {
+    xpu::push_timer("SetupGridTime");
+    GnnGpuTrackFinderSetup.SetupGrid();
+    xpu::timings SetupGridTime = xpu::pop_timer();
+
+    xpu::push_timer("SetupIterationDataTime");
+    GnnGpuTrackFinderSetup.SetupIterationData(iteration);
+    xpu::timings SetupIterationDataTime = xpu::pop_timer();
+
+    xpu::push_timer("RunGpuTracking");
+    GnnGpuTrackFinderSetup.RunGpuTracking();
+    xpu::timings RunGpuTracking = xpu::pop_timer();
+
+    if constexpr (constants::gpu::GpuTimeMonitoring) {
+      LOG(info) << "GPU tracking :: SetupGrid: " << SetupGridTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: SetupIterationData: " << SetupIterationDataTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: RunGpuTracking: " << RunGpuTracking.wall() << " ms";
+    }
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   void TrackFinderWindow::GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration,
