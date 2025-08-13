@@ -6,7 +6,6 @@ set(INCLUDE_DIRECTORIES
   ${CMAKE_CURRENT_SOURCE_DIR}/data
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental
-  ${CMAKE_CURRENT_SOURCE_DIR}/experimental_Gnn
 )
 
 set(SRCS
@@ -72,6 +71,8 @@ target_include_directories(CaCore
 
 set(DEVICE_SRCS
   experimental/CaDeviceImage.cxx
+  experimental/CaGpuTripletConstructor.cxx
+  experimental/GnnGpuGraphConstructor.cxx
 )
 
 target_compile_definitions(CaCore PUBLIC NO_ROOT)
@@ -180,6 +181,7 @@ install(
 
     experimental/GnnGpuTrackFinderSetup.h
     experimental/GnnGpuGraphConstructor.h
+    experimental/GnnGpuEmbedNet.h
 
     DESTINATION
     include/

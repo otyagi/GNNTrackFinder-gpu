@@ -10,6 +10,8 @@
 #include "CaGpuParameters.h"
 #include "CaGpuTimeMonitor.h"
 #include "GnnGpuGraphConstructor.h"
+#include "EmbedNet.h"
+#include "MLPutil.h"
 
 #include "CaHit.h"
 #include "CaVector.h"
@@ -62,6 +64,9 @@ namespace cbm::algo::ca
 
     /// Run the track finding algorithm chain
     void RunGpuTracking();
+
+    /// Load embed weights and set up for embedding hits
+    void SetupEmbedHit(const int iteration);
 
     /// Get the number of triplets
     unsigned int GetNofTriplets() const { return fNTriplets; } 

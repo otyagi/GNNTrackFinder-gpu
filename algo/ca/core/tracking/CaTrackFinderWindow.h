@@ -21,7 +21,6 @@
 #include "CaVector.h"
 #include "CaWindowData.h"
 #include "GnnGpuTrackFinderSetup.h"
-#include "GraphConstructor.h"
 
 namespace cbm::algo::ca
 {

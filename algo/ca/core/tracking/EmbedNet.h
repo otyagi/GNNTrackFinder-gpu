@@ -120,6 +120,10 @@ class EmbedNet {
 
   void setTrackType(const int trackType) { trackType_ = trackType; }
 
+  std::vector<Matrix2D> getWeights() { return weights_;}
+
+  Matrix2D getBias() { return biases_;}
+
   ~EmbedNet();
 
  private:

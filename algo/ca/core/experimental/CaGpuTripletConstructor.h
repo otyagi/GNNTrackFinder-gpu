@@ -51,8 +51,7 @@ namespace cbm::algo::ca
   };
 
   // Declare Constant Memory
-  struct strGpuTripletConstructor : xpu::constant<GPUReco, GpuTripletConstructor> {
-  };
+  struct strGpuTripletConstructor : xpu::constant<GPUReco, GpuTripletConstructor> {};
 
   struct hit_doublets {
     ca::HitIndex_t hit1;

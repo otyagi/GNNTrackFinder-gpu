@@ -15,6 +15,7 @@
 #include "CaHit.h"
 #include "CaMeasurementXy.h"
 #include "CaTriplet.h"
+#include "GnnGpuEmbedNet.h"
 #include "KfMeasurementU.h"
 
 #include <xpu/device.h>
@@ -22,14 +23,13 @@
 
 namespace cbm::algo
 {
-  //  static constexpr int kMaxNofStations = 24;
   // Block sizes / other compile time constants that need tuning
   enum GnnGpuConstants {
 #if XPU_IS_CUDA
     kSingletConstructorBlockSize      = 512,
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
-    kEmbedHitsBlockSize               = 64,
+    kEmbedHitsBlockSize = 128,
 #endif
   };
 }  // namespace cbm::algo
@@ -45,9 +45,9 @@ namespace cbm::algo::ca
   // Declare Kernels
   struct EmbedHits : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
-    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
-    using context    = xpu::kernel_context<xpu::no_smem, constants>;
-    XPU_D void operator()(context&);
+    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>; // shared memory argument required
+    XPU_D void operator()(context& ctx);
   };
 
   struct GnnIterationData {
@@ -65,11 +65,21 @@ namespace cbm::algo::ca
     XPU_D void EmbedHits(EmbedHits::context&) const;
 
    private:
-    // XPU_D void CollectHits(int iThread, int iSta, int iHit, int maxNHits, int* collectedHits) const;
+    XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
 
-    ///                          ------  DATA MEMBERS ------
-   public:
-    xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid
+    // XPU_D void affine_3to16(std::array<std::array<float, 3>, 16>& weight, std::array<float, 3>& input,
+    //                         std::array<float, 16>& bias, std::array<float, 16>& result) const;
+
+    template<int Rows, int Cols>
+    XPU_D void affine(const std::array<std::array<float, Cols>, Rows>& weight, const std::array<float, Cols>& input,
+                      const std::array<float, Rows>& bias, std::array<float, Rows>& result) const;
+
+   template<std::size_t N>
+   XPU_D void applyTanH(std::array<float, N>& vec) const;
+
+
+     ///                          ------  DATA MEMBERS ------
+     public : xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid
 
     xpu::buffer<unsigned int> fgridFirstBinEntryIndex;  ///< Index of the first entry in the grid
 
@@ -90,7 +100,6 @@ namespace cbm::algo::ca
 
     xpu::buffer<ca::Triplet> fvTriplets;  ///< Triplets
 
-    //    GpuParameters fParams;
     xpu::buffer<GpuParameters> fParams;
 
     int fIteration;
@@ -98,6 +107,10 @@ namespace cbm::algo::ca
     GpuParameters fParams_const[4];
 
     ca::GpuStation fStations_const[constants::gpu::MaxNofStations];
+
+    // Metric learning
+    xpu::buffer<std::array<float, 6>> embedCoord;
+    xpu::buffer<GnnGpuEmbedNet> embedParameters;
   };
 
 }  // namespace cbm::algo::ca

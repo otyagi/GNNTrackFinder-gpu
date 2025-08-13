@@ -81,7 +81,7 @@ void GnnGpuTrackFinderSetup::SetupParameters()
     fGraphConstructor.fStations_const[ista] = fParameters.GetStation(ista);
   }
 
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor); //?
 }  // SetupParameters
 
 void GnnGpuTrackFinderSetup::SetupGrid()
@@ -207,7 +207,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   //***
   fGraphConstructor.fIteration = fIteration;
 
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);  // <-- crashing here
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     fEventTimeMonitor.nIterations = fIteration;
@@ -219,17 +219,19 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings pd_time                           = xpu::pop_timer();
     fEventTimeMonitor.PrepareData_time[fIteration] = pd_time;
+    LOG(info) << "PrepareData_time: " << pd_time.wall();
 
     xpu::push_timer("EmbedHits_time");
   }
 
-  fQueue.launch<EmbedHits>(xpu::n_blocks(nBlocks));
+  fQueue.launch<EmbedHits>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize)); 
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
-    xpu::timings sind_time                          = xpu::pop_timer();
-    fEventTimeMonitor.EmbedHits_time[fIteration] = sind_time;
+    xpu::timings step_time                       = xpu::pop_timer();
+    fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
+    LOG(info) << "EmbedHits_time: " << step_time.wall();
 
-    xpu::push_timer("NearestNeighbours_time");
+    // xpu::push_timer("NearestNeighbours_time");
   }
 
   fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
@@ -244,4 +246,77 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     fEventTimeMonitor.Total_time[fIteration] = t;
     fEventTimeMonitor.PrintTimings(fIteration);
   }
+}
+
+void GnnGpuTrackFinderSetup::SetupEmbedHit(const int iteration)
+{
+  fGraphConstructor.embedCoord.reset(frWData.Hits().size(), xpu::buf_io);
+
+  std::vector<int> EmbNetTopology_ = {3, 16, 16, 6};
+  EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
+  const std::string srcDir         = "/home/tyagi/cbmroot/NN/";
+  if (iteration == 0) {
+    std::string fNameModel   = "embed/embed";
+    std::string fNameWeights = srcDir + fNameModel + "Weights_11.txt";
+    std::string fNameBiases  = srcDir + fNameModel + "Biases_11.txt";
+    EmbNet_.loadModel(fNameWeights, fNameBiases);
+  }
+  else if (iteration == 3) {
+    // std::string fNameModel   = "embed/embed";
+    // std::string fNameWeights = srcDir + fNameModel + "Weights_13.txt";
+    // std::string fNameBiases  = srcDir + fNameModel + "Biases_13.txt";
+    // EmbNet_.loadModel(fNameWeights, fNameBiases);
+  }
+  const auto weights = EmbNet_.getWeights();
+  const auto biases  = EmbNet_.getBias();
+
+  std::array<std::array<float, 3>, 16> embedWeights_0;   ///< Layer 0
+  std::array<std::array<float, 16>, 16> embedWeights_1;  ///< Layer 1
+  std::array<std::array<float, 16>, 6> embedWeights_2;   ///< Layer 2
+  std::array<float, 16> embedBias_0;                     ///< Layer 0
+  std::array<float, 16> embedBias_1;                     ///< Layer 1
+  std::array<float, 6> embedBias_2;                      ///< Layer 2
+
+  // Load weights and biases layer by layer
+  // Move all of this to within EmbNet_ class
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 16; ++j) {
+      embedWeights_0[i][j] = weights[0][i][j];
+    }
+  }
+  for (int i = 0; i < 16; ++i) {
+    for (int j = 0; j < 16; ++j) {
+      embedWeights_1[i][j] = weights[1][i][j];
+    }
+  }
+  for (int i = 0; i < 16; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      embedWeights_2[i][j] = weights[2][i][j];
+    }
+  }
+  for (int i = 0; i < 16; ++i) {
+    embedBias_0[i] = biases[0][i];
+  }
+  for (int i = 0; i < 16; ++i) {
+    embedBias_1[i] = biases[1][i];
+  }
+  for (int i = 0; i < 6; ++i) {
+    embedBias_2[i] = biases[2][i];
+  }
+  LOG(info) << "Weights loaded into arrays";
+
+  fGraphConstructor.embedParameters.reset(1, xpu::buf_io);
+  xpu::h_view vEmbedParaP{fGraphConstructor.embedParameters};
+
+  // Set weights and biases to embedParameters
+  vEmbedParaP[0].embedWeights_0 = embedWeights_0;
+  vEmbedParaP[0].embedWeights_1 = embedWeights_1;
+  vEmbedParaP[0].embedWeights_2 = embedWeights_2;
+  vEmbedParaP[0].embedBias_0    = embedBias_0;
+  vEmbedParaP[0].embedBias_1    = embedBias_1;
+  vEmbedParaP[0].embedBias_2    = embedBias_2;
+
+  // Copy to GPU
+  fQueue.copy(fGraphConstructor.embedParameters, xpu::h2d);
+  LOG(info) << "Copied back to GPU";
 }

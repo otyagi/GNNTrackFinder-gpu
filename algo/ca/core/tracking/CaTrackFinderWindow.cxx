@@ -28,6 +28,7 @@
 #include "CaGridEntry.h"
 #include "CaTrack.h"
 #include "CaTripletConstructor.h"
+#include "GraphConstructor.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -977,10 +978,18 @@ namespace cbm::algo::ca
     xpu::push_timer("SetupGridTime");
     GnnGpuTrackFinderSetup.SetupGrid();
     xpu::timings SetupGridTime = xpu::pop_timer();
+    LOG(info) << "GPU tracking :: SetupGrid: " << SetupGridTime.wall() << " ms";
 
     xpu::push_timer("SetupIterationDataTime");
     GnnGpuTrackFinderSetup.SetupIterationData(iteration);
     xpu::timings SetupIterationDataTime = xpu::pop_timer();
+    LOG(info) << "GPU tracking :: SetupIterationData: " << SetupIterationDataTime.wall() << " ms";
+
+    LOG(info) << "SetupEmbedHitsTime...";
+    xpu::push_timer("SetupEmbedHitsTime");
+    GnnGpuTrackFinderSetup.SetupEmbedHit(iteration);
+    xpu::timings SetupEmbedHitsTime = xpu::pop_timer();
+    LOG(info) << "GPU tracking :: Setup EmbedHits iter" << iteration << " " << SetupEmbedHitsTime.wall() << " ms";
 
     xpu::push_timer("RunGpuTracking");
     GnnGpuTrackFinderSetup.RunGpuTracking();
@@ -989,6 +998,7 @@ namespace cbm::algo::ca
     if constexpr (constants::gpu::GpuTimeMonitoring) {
       LOG(info) << "GPU tracking :: SetupGrid: " << SetupGridTime.wall() << " ms";
       LOG(info) << "GPU tracking :: SetupIterationData: " << SetupIterationDataTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: EmbedHits iter " << iteration << " " << SetupEmbedHitsTime.wall() << " ms";
       LOG(info) << "GPU tracking :: RunGpuTracking: " << RunGpuTracking.wall() << " ms";
     }
   }
