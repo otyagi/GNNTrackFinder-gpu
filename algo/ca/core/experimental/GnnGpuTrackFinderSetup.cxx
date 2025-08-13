@@ -81,7 +81,7 @@ void GnnGpuTrackFinderSetup::SetupParameters()
     fGraphConstructor.fStations_const[ista] = fParameters.GetStation(ista);
   }
 
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor); //?
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
 }  // SetupParameters
 
 void GnnGpuTrackFinderSetup::SetupGrid()
@@ -207,31 +207,30 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   //***
   fGraphConstructor.fIteration = fIteration;
 
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);  // <-- crashing here
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     fEventTimeMonitor.nIterations = fIteration;
     xpu::push_timer("Full_time");
-
-    xpu::push_timer("PrepareData_time");
-  }
-
-  if constexpr (constants::gpu::GpuTimeMonitoring) {
-    xpu::timings pd_time                           = xpu::pop_timer();
-    fEventTimeMonitor.PrepareData_time[fIteration] = pd_time;
-    LOG(info) << "PrepareData_time: " << pd_time.wall();
-
     xpu::push_timer("EmbedHits_time");
   }
 
-  fQueue.launch<EmbedHits>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize)); 
+  fQueue.launch<EmbedHits>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                       = xpu::pop_timer();
     fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
     LOG(info) << "EmbedHits_time: " << step_time.wall();
+    xpu::push_timer("NearestNeighbours_time");
+  }
 
-    // xpu::push_timer("NearestNeighbours_time");
+  fQueue.launch<NearestNeighbours>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                       = xpu::pop_timer();
+    fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
+    LOG(info) << "NearestNeighbours_time: " << step_time.wall();
+    // xpu::push_timer("_time");
   }
 
   fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
@@ -250,7 +249,9 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
 
 void GnnGpuTrackFinderSetup::SetupEmbedHit(const int iteration)
 {
-  fGraphConstructor.embedCoord.reset(frWData.Hits().size(), xpu::buf_io);
+  const int nStations = fParameters.GetNstationsActive();
+
+  fGraphConstructor.fEmbedCoord.reset(frWData.Hits().size(), xpu::buf_io);
 
   std::vector<int> EmbNetTopology_ = {3, 16, 16, 6};
   EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
@@ -305,8 +306,8 @@ void GnnGpuTrackFinderSetup::SetupEmbedHit(const int iteration)
   }
   LOG(info) << "Weights loaded into arrays";
 
-  fGraphConstructor.embedParameters.reset(1, xpu::buf_io);
-  xpu::h_view vEmbedParaP{fGraphConstructor.embedParameters};
+  fGraphConstructor.fEmbedParameters.reset(1, xpu::buf_io);
+  xpu::h_view vEmbedParaP{fGraphConstructor.fEmbedParameters};
 
   // Set weights and biases to embedParameters
   vEmbedParaP[0].embedWeights_0 = embedWeights_0;
@@ -317,6 +318,31 @@ void GnnGpuTrackFinderSetup::SetupEmbedHit(const int iteration)
   vEmbedParaP[0].embedBias_2    = embedBias_2;
 
   // Copy to GPU
-  fQueue.copy(fGraphConstructor.embedParameters, xpu::h2d);
-  LOG(info) << "Copied back to GPU";
+  fQueue.copy(fGraphConstructor.fEmbedParameters, xpu::h2d);
+  LOG(info) << "Copied embedding parameters to GPU.";
+
+  fGraphConstructor.fDoublets.reset(frWData.Hits().size(), xpu::buf_io);
+
+  // Set starting index of hits for each station
+  fGraphConstructor.fIndexFirstHitStation.reset(nStations + 1, xpu::buf_io);
+  xpu::h_view fvIndexFirstHitStation{fGraphConstructor.fIndexFirstHitStation};
+
+  int iHit = 0;
+  int lastSta = 0;
+  fvIndexFirstHitStation[lastSta] = 0;
+  for (const auto& hit : frWData.Hits()){
+    // LOG(info) << "Hit: " << iHit << " , Station: " << hit.Station(); // hits ordered by Station
+    const int curSta = hit.Station();
+    if (curSta == lastSta + 1) {
+      fvIndexFirstHitStation[curSta] = iHit;
+      // LOG(info) << fvIndexFirstHitStation[curSta];
+      lastSta = curSta;
+    }
+    iHit++;
+  }
+  fvIndexFirstHitStation[nStations] = iHit;
+  // LOG(info) << iHit;
+
+  fQueue.copy(fGraphConstructor.fIndexFirstHitStation, xpu::h2d);
+
 }

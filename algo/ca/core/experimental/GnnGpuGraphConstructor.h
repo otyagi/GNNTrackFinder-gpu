@@ -45,8 +45,15 @@ namespace cbm::algo::ca
   // Declare Kernels
   struct EmbedHits : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
-    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
-    using context    = xpu::kernel_context<xpu::no_smem, constants>; // shared memory argument required
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx);
+  };
+
+  struct NearestNeighbours : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
     XPU_D void operator()(context& ctx);
   };
 
@@ -64,6 +71,8 @@ namespace cbm::algo::ca
     ///                             ------  FUNCTIONAL PART ------
     XPU_D void EmbedHits(EmbedHits::context&) const;
 
+    XPU_D void NearestNeighbours(NearestNeighbours::context&) const;
+
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
 
@@ -74,12 +83,16 @@ namespace cbm::algo::ca
     XPU_D void affine(const std::array<std::array<float, Cols>, Rows>& weight, const std::array<float, Cols>& input,
                       const std::array<float, Rows>& bias, std::array<float, Rows>& result) const;
 
-   template<std::size_t N>
-   XPU_D void applyTanH(std::array<float, N>& vec) const;
+    template<std::size_t N>
+    XPU_D void applyTanH(std::array<float, N>& vec) const;
+
+    XPU_D float hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const;
 
 
-     ///                          ------  DATA MEMBERS ------
-     public : xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid
+
+    ///                          ------  DATA MEMBERS ------
+   public:
+    xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid for every station
 
     xpu::buffer<unsigned int> fgridFirstBinEntryIndex;  ///< Index of the first entry in the grid
 
@@ -108,9 +121,13 @@ namespace cbm::algo::ca
 
     ca::GpuStation fStations_const[constants::gpu::MaxNofStations];
 
+    // General
+    xpu::buffer<unsigned int> fIndexFirstHitStation; // index (in fvHits) of first hit on station
+
     // Metric learning
-    xpu::buffer<std::array<float, 6>> embedCoord;
-    xpu::buffer<GnnGpuEmbedNet> embedParameters;
+    xpu::buffer<std::array<float, 6>> fEmbedCoord;
+    xpu::buffer<GnnGpuEmbedNet> fEmbedParameters;
+    xpu::buffer<std::array<float, 20>> fDoublets; // neighbours for every hit from kNN
   };
 
 }  // namespace cbm::algo::ca
