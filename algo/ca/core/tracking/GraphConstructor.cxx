@@ -123,7 +123,7 @@ namespace cbm::algo::ca
       tripletScores_.push_back(tripletScores[i]);
     }
 
-    // FitTriplets(0);  // replaces dummy triplet score with KF chi2
+    FitTriplets(0);  // replaces dummy triplet score with KF chi2
 
     if (mode == 0) {
       SaveAllTripletsAsTracks();

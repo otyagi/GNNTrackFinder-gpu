@@ -239,17 +239,17 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::timings step_time                            = xpu::pop_timer();
     fEventTimeMonitor.MakeTripletsOT_time[fIteration] = step_time;
     LOG(info) << "MakeTripletsOT_time: " << step_time.wall();
-    // xpu::push_timer("FitTripletsOT_time");
+    xpu::push_timer("FitTripletsOT_time");
   }
 
-  // fQueue.launch<FitTripletsOT>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<FitTripletsOT>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
 
-  // if constexpr (constants::gpu::GpuTimeMonitoring) {
-  //   xpu::timings step_time                           = xpu::pop_timer();
-  //   fEventTimeMonitor.FitTripletsOT_time[fIteration] = step_time;
-  //   LOG(info) << "FitTripletsOT_time: " << step_time.wall();
-  //   // xpu::push_timer("FitTriplets_time");
-  // }
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                           = xpu::pop_timer();
+    fEventTimeMonitor.FitTripletsOT_time[fIteration] = step_time;
+    LOG(info) << "FitTripletsOT_time: " << step_time.wall();
+    // xpu::push_timer("FitTriplets_time");
+  }
 
   fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
   fGraphConstructor.fvGpuGrid.reset(0, xpu::buf_io);
