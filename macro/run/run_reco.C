@@ -96,7 +96,7 @@
  ** from the ROOT prompt without user intervention.
  **
  **/
-void run_reco(TString input = "urqmd_mbias", Int_t nTimeSlices = 1, Int_t firstTimeSlice = 0, TString output = "",
+void run_reco(TString input = "urqmd_mbias", Int_t nTimeSlices = 100, Int_t firstTimeSlice = 0, TString output = "",
               TString sEvBuildRaw = "", TString setup = "sis100_electron", TString paramFile = "",
               Bool_t debugWithMC = true)
 {

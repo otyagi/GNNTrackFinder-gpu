@@ -66,7 +66,10 @@ namespace cbm::algo::ca
     void RunGpuTracking();
 
     /// Load embed weights and set up for embedding hits
-    void SetupEmbedHit(const int iteration);
+    void SetupMetricLearning(const int iteration);
+
+    /// Save doublets as tracks for debugging
+    void SaveDoubletsAsTracks();
 
     /// Get the number of triplets
     unsigned int GetNofTriplets() const { return fNTriplets; } 

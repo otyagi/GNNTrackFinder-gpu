@@ -45,28 +45,58 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours(NearestNeighbours::context&
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= fIterationData[0].fNHits) return;
 
-  const int kNN_order = 20;    // FastPrim
-  const float margin  = 2.0f;  // FastPrim
-  const auto& hitl    = fvHits[iGThread];
-  const float y_l     = hitl.Y();
-  const float z_l     = hitl.Z() + 44.0f;
-  const int lSta      = hitl.Station();
-  if (lSta > 10) return;
-  const int mSta = lSta + 1;
+  const int kNNOrder = 20;    // FastPrim
+  const float margin = 2.0f;  // FastPrim
+  auto& neighbours   = fDoublets[iGThread];
+  int neighCount     = 0;
+  float maxDist      = 0.0f;
+  float maxDistIndex = 0;
 
-  // go over hits on next station and find closest upto 20 which satisfy slope condition
-  const ca::HitIndex_t iHitStart = fIndexFirstHitStation[mSta];      // start index
-  const ca::HitIndex_t iHitEnd   = fIndexFirstHitStation[mSta + 1];  // end index
+  const auto& hitl = fvHits[iGThread];
+  const float y_l  = hitl.Y();
+  const float z_l  = hitl.Z() + 44.0f;
+  const int iStaL  = hitl.Station();
+  if (iStaL > 10) {
+    fNNeighbours[iGThread] = neighCount;
+    return;
+  }
+  const int iStaM = iStaL + 1;
+
+  // Find closest hits (upto kNNOrder) which satisfy slope condition
+  const ca::HitIndex_t iHitStart = fIndexFirstHitStation[iStaM];      // start index
+  const ca::HitIndex_t iHitEnd   = fIndexFirstHitStation[iStaM + 1];  // end index
   for (std::size_t ihitm = iHitStart; ihitm < iHitEnd; ihitm++) {
     const auto& hitm = fvHits[ihitm];
-    // embedding distance
-    const float dist = hitDistanceSq(fEmbedCoord[iGThread], fEmbedCoord[ihitm]);
     // margin
     const float y_m   = hitm.Y();
     const float z_m   = hitm.Z() + 44.0f;
     const float slope = (y_m - y_l) / (z_m - z_l);
     if (xpu::abs(y_l - slope * z_l) > margin) continue;
-  }
+
+    // embedding distance
+    const float dist = hitDistanceSq(fEmbedCoord[iGThread], fEmbedCoord[ihitm]);
+
+    if (neighCount < kNNOrder) {
+      neighbours[neighCount++] = ihitm;
+      if (dist > maxDist) {
+        maxDist      = dist;
+        maxDistIndex = neighCount - 1;
+      }
+    }
+    else if (dist < maxDist) {  // replace hit max distance
+      neighbours[maxDistIndex] = ihitm;
+      maxDist                  = 0.0f;
+      for (int i = 0; i < kNNOrder; i++) {
+        const float dist_re = hitDistanceSq(fEmbedCoord[iGThread], fEmbedCoord[neighbours[i]]);
+        if (dist_re > maxDist) {
+          maxDist      = dist_re;
+          maxDistIndex = i;
+        }
+      }
+    }
+  }  // hits on iStaM
+
+  fNNeighbours[iGThread] = neighCount;
 }
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const

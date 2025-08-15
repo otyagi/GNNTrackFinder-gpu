@@ -88,8 +88,6 @@ namespace cbm::algo::ca
 
     XPU_D float hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const;
 
-
-
     ///                          ------  DATA MEMBERS ------
    public:
     xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid for every station
@@ -127,7 +125,9 @@ namespace cbm::algo::ca
     // Metric learning
     xpu::buffer<std::array<float, 6>> fEmbedCoord;
     xpu::buffer<GnnGpuEmbedNet> fEmbedParameters;
-    xpu::buffer<std::array<float, 20>> fDoublets; // neighbours for every hit from kNN
+    constexpr static const int kNNOrder = 20; // FastPrim
+    xpu::buffer<std::array<float, kNNOrder>> fDoublets; // neighbours of every hit from kNN. Hit index in fvHits
+    xpu::buffer<unsigned int> fNNeighbours; // num neighbours for each hit, max kNNOrder
   };
 
 }  // namespace cbm::algo::ca
