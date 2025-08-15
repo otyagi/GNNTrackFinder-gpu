@@ -57,6 +57,13 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
+  struct MakeTripletsOT : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx);
+  };
+
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
     int fIteration;          ///< Iteration number
@@ -72,6 +79,8 @@ namespace cbm::algo::ca
     XPU_D void EmbedHits(EmbedHits::context&) const;
 
     XPU_D void NearestNeighbours(NearestNeighbours::context&) const;
+
+    XPU_D void MakeTripletsOT(MakeTripletsOT::context&) const;
 
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;

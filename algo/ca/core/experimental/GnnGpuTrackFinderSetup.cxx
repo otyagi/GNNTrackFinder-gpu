@@ -230,16 +230,16 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::timings step_time                               = xpu::pop_timer();
     fEventTimeMonitor.NearestNeighbours_time[fIteration] = step_time;
     LOG(info) << "NearestNeighbours_time: " << step_time.wall();
-    xpu::push_timer("MakeTriplets_time");
+    xpu::push_timer("MakeTripletsOT_time");
   }
 
-  fQueue.launch<MakeTriplets>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<MakeTripletsOT>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                               = xpu::pop_timer();
     fEventTimeMonitor.MakeTriplets_time[fIteration] = step_time;
-    LOG(info) << "MakeTriplets_time: " << step_time.wall();
-    // xpu::push_timer("FitTriplets_time");
+    LOG(info) << "MakeTripletsOT_time: " << step_time.wall();
+    // xpu::push_timer("FitTripletsOT_time");
   }
 
   // fQueue.launch<FitTriplets>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
@@ -247,7 +247,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   // if constexpr (constants::gpu::GpuTimeMonitoring) {
   //   xpu::timings step_time                               = xpu::pop_timer();
   //   fEventTimeMonitor.FitTriplets_time[fIteration] = step_time;
-  //   LOG(info) << "FitTriplets_time: " << step_time.wall();
+  //   LOG(info) << "FitTripletsOT_time: " << step_time.wall();
     // xpu::push_timer("FitTriplets_time");
   // }
 

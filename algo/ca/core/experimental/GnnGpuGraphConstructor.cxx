@@ -25,6 +25,8 @@ XPU_D void EmbedHits::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstruc
 XPU_EXPORT(NearestNeighbours);
 XPU_D void NearestNeighbours::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().NearestNeighbours(ctx); }
 
+XPU_EXPORT(MakeTripletsOT);
+XPU_D void MakeTripletsOT::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().MakeTripletsOT(ctx); }
 
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
@@ -97,6 +99,11 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours(NearestNeighbours::context&
   }  // hits on iStaM
 
   fNNeighbours[iGThread] = neighCount;
+}
+
+XPU_D void GnnGpuGraphConstructor::MakeTripletsOT(MakeTripletsOT::context& ctx) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
 }
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const

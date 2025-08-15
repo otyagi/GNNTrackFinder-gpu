@@ -36,8 +36,8 @@ namespace cbm::algo::ca
     // Gnn time monitors
     xpu::timings EmbedHits_time[4];
     xpu::timings NearestNeighbours_time[4];
-    xpu::timings MakeTriplets_time[4];
-    xpu::timings FitTriplets_time[4];
+    xpu::timings MakeTripletsOT_time[4];
+    xpu::timings FitTripletsOT_time[4];
 
     int nIterations;
 
@@ -69,8 +69,8 @@ namespace cbm::algo::ca
       // GNN GPU
       print_timing("EmbedHits_time", EmbedHits_time[iteration]);
       print_timing("NearestNeighbours_time", NearestNeighbours_time[iteration]);
-      print_timing("MakeTriplets_time", MakeTriplets_time[iteration]);
-      print_timing("FitTriplets_time", FitTriplets_time[iteration]);
+      print_timing("MakeTripletsOT_time", MakeTripletsOT_time[iteration]);
+      print_timing("FitTripletsOT_time", FitTripletsOT_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
     }
   };
