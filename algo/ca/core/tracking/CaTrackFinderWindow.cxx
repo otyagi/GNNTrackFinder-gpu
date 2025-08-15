@@ -971,7 +971,7 @@ namespace cbm::algo::ca
 
   // -------------------------------------------------------------------------------------------------------------------
   void TrackFinderWindow::ConstructGnnTripletsGpu(WindowData& wData, GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup,
-                                               int iteration)
+                                                  int iteration)
   {
     xpu::push_timer("SetupGridTime");
     GnnGpuTrackFinderSetup.SetupGrid();
@@ -981,10 +981,10 @@ namespace cbm::algo::ca
     GnnGpuTrackFinderSetup.SetupIterationData(iteration);
     xpu::timings SetupIterationDataTime = xpu::pop_timer();
 
-    xpu::push_timer("SetupMetricLearningTime");
-    GnnGpuTrackFinderSetup.SetupMetricLearning(iteration);
-    xpu::timings SetupMetricLearningTime = xpu::pop_timer();
-    LOG(info) << "GPU tracking :: SetupMetricLearning iter" << iteration << " " << SetupMetricLearningTime.wall() << " ms";
+    xpu::push_timer("SetupGNNTime");
+    GnnGpuTrackFinderSetup.SetupGNN(iteration);
+    xpu::timings SetupGNNTime = xpu::pop_timer();
+    LOG(info) << "GPU tracking :: SetupGNNTime iter" << iteration << " " << SetupGNNTime.wall() << " ms";
 
     xpu::push_timer("RunGpuTracking");
     GnnGpuTrackFinderSetup.RunGpuTracking();
@@ -993,12 +993,13 @@ namespace cbm::algo::ca
     if constexpr (constants::gpu::GpuTimeMonitoring) {
       LOG(info) << "GPU tracking :: SetupGrid: " << SetupGridTime.wall() << " ms";
       LOG(info) << "GPU tracking :: SetupIterationData: " << SetupIterationDataTime.wall() << " ms";
-      LOG(info) << "GPU tracking :: SetupMetricLearning iter " << iteration << ": " << SetupMetricLearningTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: SetupMetricLearning iter " << iteration << ": " << SetupGNNTime.wall() << " ms";
       LOG(info) << "GPU tracking :: RunGpuTracking: " << RunGpuTracking.wall() << " ms";
     }
 
     // Debugging
     // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks();
+    GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1010,7 +1011,7 @@ namespace cbm::algo::ca
     // Argument to run classifier is:
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
-      case 0: graphConstructor.FindFastPrim(2); break;
+      case 0: graphConstructor.FindFastPrim(0); break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;
     }
 

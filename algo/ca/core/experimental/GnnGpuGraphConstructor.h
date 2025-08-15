@@ -64,6 +64,13 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
+  // struct FitTripletsOT : xpu::kernel<GPUReco> {
+  //   using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+  //   using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+  //   using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+  //   XPU_D void operator()(context& ctx);
+  // };
+
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
     int fIteration;          ///< Iteration number
@@ -129,14 +136,19 @@ namespace cbm::algo::ca
     ca::GpuStation fStations_const[constants::gpu::MaxNofStations];
 
     // General
-    xpu::buffer<unsigned int> fIndexFirstHitStation; // index (in fvHits) of first hit on station
+    xpu::buffer<unsigned int> fIndexFirstHitStation;  // index (in fvHits) of first hit on station
 
     // Metric learning
     xpu::buffer<std::array<float, 6>> fEmbedCoord;
     xpu::buffer<GnnGpuEmbedNet> fEmbedParameters;
-    constexpr static const int kNNOrder = 20; // FastPrim
-    xpu::buffer<std::array<float, kNNOrder>> fDoublets; // neighbours of every hit from kNN. Hit index in fvHits
-    xpu::buffer<unsigned int> fNNeighbours; // num neighbours for each hit, max kNNOrder
+    constexpr static const int kNNOrder = 20;                   // FastPrim
+    xpu::buffer<std::array<unsigned int, kNNOrder>> fDoublets;  // neighbours of every hit from kNN. Hit index in fvHits
+    xpu::buffer<unsigned int> fNNeighbours;                     // num doublets for each hit, max kNNOrder
+
+    // triplet construction and fitting
+    xpu::buffer<std::array<std::array<unsigned int, 2>, kNNOrder * kNNOrder>>
+      fTriplets;                           // Triplets from hit. Can be max kNNOrder**2. Hit index in fvHits
+    xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
   };
 
 }  // namespace cbm::algo::ca

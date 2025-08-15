@@ -47,7 +47,6 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours(NearestNeighbours::context&
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= fIterationData[0].fNHits) return;
 
-  const int kNNOrder = 20;    // FastPrim
   const float margin = 2.0f;  // FastPrim
   auto& neighbours   = fDoublets[iGThread];
   int neighCount     = 0;
@@ -104,6 +103,66 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours(NearestNeighbours::context&
 XPU_D void GnnGpuGraphConstructor::MakeTripletsOT(MakeTripletsOT::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+  if (iGThread >= fIterationData[0].fNHits) return;
+
+  int tripletCount = 0;
+
+  const float YZCut = 0.1;  // (radians) def - 0.1 from distributions
+  const float XZCut = 0.1;  // def - 0.1 from distributions
+
+  auto& tripletsLHit = fTriplets[iGThread]; 
+  const auto& doubletsLHit = fDoublets[iGThread];
+  const int nLHitDoublets  = fNNeighbours[iGThread];
+  const auto& hitl         = fvHits[iGThread];
+  const float x_l          = hitl.X();
+  const float y_l          = hitl.Y();
+  const float z_l          = hitl.Z();
+  const int iStaL          = hitl.Station();
+  if (iStaL > 9) {
+    fNTriplets[iGThread] = tripletCount;
+    return;
+  }
+  const int iStaM = iStaL + 1;
+
+  const ca::HitIndex_t iHitStartM = fIndexFirstHitStation[iStaM];      // start index middle station
+  const ca::HitIndex_t iHitEndM   = fIndexFirstHitStation[iStaM + 1];  // end index
+  for (int iDoubletL = 0; iDoubletL < nLHitDoublets; iDoubletL++) {
+    const unsigned int iHitM = doubletsLHit[iDoubletL];
+    for (std::size_t iM = iHitStartM; iM < iHitEndM; iM++) {  // hits on next station
+      if (iHitM == iM) {
+        const auto& hitm = fvHits[iHitM];
+        const float x_m  = hitm.X();
+        const float y_m  = hitm.Y();
+        const float z_m  = hitm.Z();
+
+        const int nMHitDoublets = fNNeighbours[iHitM];
+        for (int iDoubletM = 0; iDoubletM < nMHitDoublets; iDoubletM++) {
+          const unsigned int iHitR = fDoublets[iHitM][iDoubletM];
+          const auto& hitr         = fvHits[iHitR];
+          const float x_r          = hitr.X();
+          const float y_r          = hitr.Y();
+          const float z_r          = hitr.Z();
+
+          // Cuts on triplet angles. Limits come from distributions
+          // YZ
+          const float angle1YZ    = xpu::atan2(y_m - y_l, z_m - z_l);
+          const float angle2YZ    = xpu::atan2(y_r - y_m, z_r - z_m);
+          const float angleDiffYZ = angle1YZ - angle2YZ;
+          if (angleDiffYZ < -YZCut || angleDiffYZ > YZCut) continue;
+
+          // XZ
+          const float angle1XZ    = xpu::atan2(x_m - x_l, z_m - z_l);
+          const float angle2XZ    = xpu::atan2(x_r - x_m, z_r - z_m);
+          const float angleDiffXZ = angle1XZ - angle2XZ;
+          if (angleDiffXZ < -XZCut || angleDiffXZ > XZCut) continue;
+
+          tripletsLHit[tripletCount++] = std::array<unsigned int, 2>{iHitM, iHitR};
+        }
+        break;  // only one match possible
+      }
+    }
+  }
+  fNTriplets[iGThread] = tripletCount;
 }
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const
