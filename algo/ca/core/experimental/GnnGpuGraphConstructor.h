@@ -17,6 +17,7 @@
 #include "CaTriplet.h"
 #include "GnnGpuEmbedNet.h"
 #include "KfMeasurementU.h"
+#include "CaGpuField.h"
 
 #include <xpu/device.h>
 #include <xpu/host.h>
@@ -64,7 +65,14 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
-  struct FitTripletsOT : xpu::kernel<GPUReco> {
+  struct FitTripletsOT1 : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx);
+  };
+
+  struct FitTripletsOT2 : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
@@ -89,7 +97,10 @@ namespace cbm::algo::ca
 
     XPU_D void MakeTripletsOT(MakeTripletsOT::context&) const;
 
-    XPU_D void FitTripletsOT(MakeTripletsOT::context&) const;
+    XPU_D void FitTripletsOT1(FitTripletsOT1::context&) const;
+
+    XPU_D void FitTripletsOT2(FitTripletsOT2::context&) const;
+
 
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
@@ -125,13 +136,11 @@ namespace cbm::algo::ca
     /// hit.Id is replaced by the hit index in fInputData
     xpu::buffer<ca::Hit> fvHits;
 
-    xpu::buffer<kf::TrackParamBase<float>> fvTrackParams;  ///< Track parameters
-
-    xpu::buffer<ca::Triplet> fvTriplets;  ///< Triplets
+    // xpu::buffer<ca::Triplet> fvTriplets;  ///< Triplets
 
     xpu::buffer<GpuParameters> fParams;
 
-    int fIteration;
+    int fIteration = 0;
 
     GpuParameters fParams_const[4];
 
@@ -147,10 +156,15 @@ namespace cbm::algo::ca
     xpu::buffer<std::array<unsigned int, kNNOrder>> fDoublets;  // neighbours of every hit from kNN. Hit index in fvHits
     xpu::buffer<unsigned int> fNNeighbours;                     // num doublets for each hit, max kNNOrder
 
-    // triplet construction and fitting
+    // triplet construction
     xpu::buffer<std::array<std::array<unsigned int, 2>, kNNOrder * kNNOrder>>
       fTriplets;                           // Triplets from hit. Can be max kNNOrder**2. Hit index in fvHits
     xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
+
+    // triplet fitting
+    xpu::buffer<kf::TrackParamBase<float>> fvTripletParams;          ///< Triplet parameters
+
+
   };
 
 }  // namespace cbm::algo::ca
