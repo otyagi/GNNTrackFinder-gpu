@@ -17,27 +17,28 @@
 //#include "KfMeasurementXy.h"
 #include "CaMeasurementXy.h"
 //#include "KfSimd.h"
+#include "KfTrackKalmanFilter.h"
 #include "KfTrackParam.h"
 #include "KfUtils.h"
-#include "KfTrackKalmanFilter.h"
 
 #include <type_traits>
+
 #include <xpu/device.h>
 
 namespace cbm::algo::kf
 {
   class Hit;
 
-//  enum class FitDirection
-//  {
-//    kUpstream,
-//    kDownstream
-//  };
+  //  enum class FitDirection
+  //  {
+  //    kUpstream,
+  //    kDownstream
+  //  };
 
-//  inline FitDirection operator!(FitDirection d)
-//  {
-//    return d == FitDirection::kUpstream ? FitDirection::kDownstream : FitDirection::kUpstream;
-//  }
+  //  inline FitDirection operator!(FitDirection d)
+  //  {
+  //    return d == FitDirection::kUpstream ? FitDirection::kDownstream : FitDirection::kUpstream;
+  //  }
 
   /// Track fit utilities for the CA tracking based on the Kalman Filter
   ///
@@ -55,7 +56,7 @@ namespace cbm::algo::kf
       , fMass(0.10565800)
       , fMass2(fMass * fMass)
       , fMaxExtraplationStep(50.)
-      ,fDoFitVelocity(false)
+      , fDoFitVelocity(false)
     {
     }
 
@@ -72,9 +73,9 @@ namespace cbm::algo::kf
     XPU_D void SetMask(const DataTmask& m) { fMask = m; }
 
     template<typename T>
-    void SetTrack(const kf::TrackParam<T>& t)
+    XPU_D void SetTrack(const kf::TrackParam<T>& t)
     {
-      fTr.Set(t);
+      fTr.SetOneGpu(t);
       fQp0 = fTr.GetQp();
     }
 
@@ -112,13 +113,14 @@ namespace cbm::algo::kf
     /// get the particle mass
     DataT GetMaxExtrapolationStep() const { return fMaxExtraplationStep; }
 
-    XPU_D inline float iif_mask(bool cond, float val_true, float val_false) {
-//      if constexpr (std::is_same_v<DataT, float>) {
-        float mask = cond ? 1.0f : 0.0f;
-        return mask * val_true + (1.0f - mask) * val_false;
-//      } else {
-//	return kf::utils::iif(cond, val_true, val_false);
-//      }
+    XPU_D inline float iif_mask(bool cond, float val_true, float val_false)
+    {
+      //      if constexpr (std::is_same_v<DataT, float>) {
+      float mask = cond ? 1.0f : 0.0f;
+      return mask * val_true + (1.0f - mask) * val_false;
+      //      } else {
+      //	return kf::utils::iif(cond, val_true, val_false);
+      //      }
     }
 
     /// filter the track with the 1d measurement
@@ -149,20 +151,20 @@ namespace cbm::algo::kf
       // correction to HCH is needed for the case when sigma2 is so small
       // with respect to HCH that it disappears due to the roundoff error
       //
-      DataT w  = m.Du2() + (doProtect ? (DataT(1.0000001) * HCH) : HCH);
-//      DataT wi = kf::utils::iif(fMask, DataT(1.) / w, DataT(0.));
+      DataT w = m.Du2() + (doProtect ? (DataT(1.0000001) * HCH) : HCH);
+      //      DataT wi = kf::utils::iif(fMask, DataT(1.) / w, DataT(0.));
       DataT wi = iif_mask(fMask, DataT(1.) / w, DataT(0.));
 
-//      DataT zetawi = zeta / (kf::utils::iif(maskDoFilter, m.Du2(), DataT(0.)) + HCH);
+      //      DataT zetawi = zeta / (kf::utils::iif(maskDoFilter, m.Du2(), DataT(0.)) + HCH);
       DataT zetawi = zeta / (iif_mask(maskDoFilter, m.Du2(), DataT(0.)) + HCH);
-//      zetawi       = kf::utils::iif(fMask, zetawi, DataT(0.));
-      zetawi       = iif_mask(fMask, zetawi, DataT(0.));
+      //      zetawi       = kf::utils::iif(fMask, zetawi, DataT(0.));
+      zetawi = iif_mask(fMask, zetawi, DataT(0.));
 
-//      wi = kf::utils::iif(m.Du2() > DataT(0.), wi, DataT(0.));
+      //      wi = kf::utils::iif(m.Du2() > DataT(0.), wi, DataT(0.));
       wi = iif_mask(m.Du2() > DataT(0.), wi, DataT(0.));
 
       fTr.ChiSq() += zeta * zeta * wi;
-//      fTr.Ndf() += kf::utils::iif(fMask, m.Ndf(), DataT(0.));
+      //      fTr.Ndf() += kf::utils::iif(fMask, m.Ndf(), DataT(0.));
       fTr.Ndf() += iif_mask(fMask, m.Ndf(), DataT(0.));
 
       K1 = F1 * wi;
@@ -217,8 +219,8 @@ namespace cbm::algo::kf
     }
 
     /// filter the track with the XY measurement
-//    XPU_D void FilterXY(const kf::MeasurementXy<DataT>& mxy, bool skipUnmeasuredCoordinates = false)ca::MeasurementXy<float>
-    XPU_D void FilterXY(const ca::MeasurementXy<float>& mxy, bool skipUnmeasuredCoordinates = false)	//TODO: GPU only
+    //    XPU_D void FilterXY(const kf::MeasurementXy<DataT>& mxy, bool skipUnmeasuredCoordinates = false)ca::MeasurementXy<float>
+    XPU_D void FilterXY(const ca::MeasurementXy<float>& mxy, bool skipUnmeasuredCoordinates = false)  //TODO: GPU only
     {
       {
         kf::MeasurementU<DataT> mx;
@@ -383,15 +385,15 @@ namespace cbm::algo::kf
 
       const DataTmask maskDoFilter = mask && (HCH < dt2 * 16.f);
 
-//      DataT wi     = kf::utils::iif(mask, DataT(1.) / (dt2 + DataT(1.0000001) * HCH), DataT(0.));
-//      DataT zeta   = kf::utils::iif(mask, fTr.Time() - t, DataT(0.));
-//      DataT zetawi = kf::utils::iif(mask, zeta / (kf::utils::iif(maskDoFilter, dt2, DataT(0.)) + HCH), DataT(0.));
+      //      DataT wi     = kf::utils::iif(mask, DataT(1.) / (dt2 + DataT(1.0000001) * HCH), DataT(0.));
+      //      DataT zeta   = kf::utils::iif(mask, fTr.Time() - t, DataT(0.));
+      //      DataT zetawi = kf::utils::iif(mask, zeta / (kf::utils::iif(maskDoFilter, dt2, DataT(0.)) + HCH), DataT(0.));
       DataT wi     = iif_mask(mask, DataT(1.) / (dt2 + DataT(1.0000001) * HCH), DataT(0.));
       DataT zeta   = iif_mask(mask, fTr.Time() - t, DataT(0.));
       DataT zetawi = iif_mask(mask, zeta / (iif_mask(maskDoFilter, dt2, DataT(0.)) + HCH), DataT(0.));
 
-//      fTr.ChiSqTime() += kf::utils::iif(maskDoFilter, zeta * zeta * wi, DataT(0.));
-//      fTr.NdfTime() += kf::utils::iif(mask, DataT(1.), DataT(0.));
+      //      fTr.ChiSqTime() += kf::utils::iif(maskDoFilter, zeta * zeta * wi, DataT(0.));
+      //      fTr.NdfTime() += kf::utils::iif(mask, DataT(1.), DataT(0.));
       fTr.ChiSqTime() += iif_mask(maskDoFilter, zeta * zeta * wi, DataT(0.));
       fTr.NdfTime() += iif_mask(mask, DataT(1.), DataT(0.));
 
@@ -447,13 +449,13 @@ namespace cbm::algo::kf
     }
 
     /// filter the track with the time measurement
-//    void FilterTime(kf::MeasurementTime<DataT> mt) { FilterTime(mt.T(), mt.Dt2(), DataTmask(mt.NdfT() > DataT(0.))); }
+    //    void FilterTime(kf::MeasurementTime<DataT> mt) { FilterTime(mt.T(), mt.Dt2(), DataTmask(mt.NdfT() > DataT(0.))); }
 
     /// filter the inverse speed
-//    void FilterVi(DataT vi);
+    //    void FilterVi(DataT vi);
 
     /// measure the track velocity with the track Qp and the mass
-//    void MeasureVelocityWithQp();
+    //    void MeasureVelocityWithQp();
 
     /// extrapolate the track to the given Z using the field F
     /// it can do several extrapolation steps if the Z is far away
@@ -461,19 +463,19 @@ namespace cbm::algo::kf
     /// \param F - field region
     XPU_D void Extrapolate(DataT z_out, const ca::GpuFieldRegion& F)
     {
-	// use Q/p linearisation at fQp0
-//	if (F.GetFieldType() == kf::EFieldType::Null) {
-//	  ExtrapolateLineNoField(z_out);
-//	}
-//	else {
-        DataT sgn = iif_mask(fTr.GetZ() < z_out, DataT(1.), DataT(-1.));
-	while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {	//TODO: only for XPU
-//	        !kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
-          DataT zNew = fTr.GetZ() + sgn * fMaxExtraplationStep;  // max. 50 cm step
-	  zNew       = iif_mask(sgn * (z_out - zNew) <= DataT(0.), z_out, zNew);
-	  ExtrapolateStep(zNew, F);
-	}
-//	}
+      // use Q/p linearisation at fQp0
+      //	if (F.GetFieldType() == kf::EFieldType::Null) {
+      //	  ExtrapolateLineNoField(z_out);
+      //	}
+      //	else {
+      DataT sgn = iif_mask(fTr.GetZ() < z_out, DataT(1.), DataT(-1.));
+      while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {  //TODO: only for XPU
+        //	        !kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
+        DataT zNew = fTr.GetZ() + sgn * fMaxExtraplationStep;  // max. 50 cm step
+        zNew       = iif_mask(sgn * (z_out - zNew) <= DataT(0.), z_out, zNew);
+        ExtrapolateStep(zNew, F);
+      }
+      //	}
     }
 
     /// extrapolate the track to the given Z using the field F
@@ -522,7 +524,7 @@ namespace cbm::algo::kf
 
       //----------------------------------------------------------------
 
-//      cnst zMasked = kf::utils::iif(fMask, zOut, fTr.GetZ());
+      //      cnst zMasked = kf::utils::iif(fMask, zOut, fTr.GetZ());
       cnst zMasked = iif_mask(fMask, zOut, fTr.GetZ());
 
       cnst h = (zMasked - fTr.GetZ());
@@ -549,11 +551,11 @@ namespace cbm::algo::kf
         }
         DataT z = fTr.GetZ() + stepDz[step];
 
-//        kf::FieldValue B = Field.Get(rstep[0], rstep[1], z);
-        ca::GpuFieldValue B = Field.Get(rstep[0], rstep[1], z);	//TODO: GPU only
-        DataT Bx         = B.x;
-        DataT By         = B.y;
-        DataT Bz         = B.z;
+        //        kf::FieldValue B = Field.Get(rstep[0], rstep[1], z);
+        ca::GpuFieldValue B = Field.Get(rstep[0], rstep[1], z);  //TODO: GPU only
+        DataT Bx            = B.x;
+        DataT By            = B.y;
+        DataT Bz            = B.z;
         // NOTE: SZh 13.08.2024: The rstep[0] and rstep[1] make no effect on the B value, if Field is an approximation
 
         DataT tx    = rstep[2];
@@ -691,10 +693,10 @@ namespace cbm::algo::kf
     }
 
     /// extrapolate the track to the given Z using linearization at the straight line
-//    void ExtrapolateLine(DataT z_out, const kf::FieldRegion<DataT>& F);
+    //    void ExtrapolateLine(DataT z_out, const kf::FieldRegion<DataT>& F);
 
     /// extrapolate the track to the given Z assuming no magnetic field
-//    void ExtrapolateLineNoField(DataT z_out);
+    //    void ExtrapolateLineNoField(DataT z_out);
 
     /// apply energy loss correction to the track
     /// \param radThick - radiation length of the material
@@ -719,23 +721,23 @@ namespace cbm::algo::kf
 
       DataT corr   = sqrt(p2 / (E2Corrected - fMass2));
       DataTmask ok = (corr == corr) && fMask;
-//      corr         = kf::utils::iif(ok, corr, DataT(1.));
-      corr         = iif_mask(ok, corr, DataT(1.));
+      //      corr         = kf::utils::iif(ok, corr, DataT(1.));
+      corr = iif_mask(ok, corr, DataT(1.));
 
       fQp0 *= corr;
       fTr.Qp() *= corr;
-//      fTr.C40() *= corr;
-//      fTr.C41() *= corr;
-//      fTr.C42() *= corr;
-//      fTr.C43() *= corr;
-//      fTr.C44() *= corr * corr;
-//      fTr.C54() *= corr;
-      fTr.C (4, 0) *= corr;
-      fTr.C (4, 1) *= corr;
-      fTr.C (4, 2) *= corr;
-      fTr.C (4, 3) *= corr;
-      fTr.C (4, 4) *= corr * corr;
-      fTr.C (5, 4) *= corr;
+      //      fTr.C40() *= corr;
+      //      fTr.C41() *= corr;
+      //      fTr.C42() *= corr;
+      //      fTr.C43() *= corr;
+      //      fTr.C44() *= corr * corr;
+      //      fTr.C54() *= corr;
+      fTr.C(4, 0) *= corr;
+      fTr.C(4, 1) *= corr;
+      fTr.C(4, 2) *= corr;
+      fTr.C(4, 3) *= corr;
+      fTr.C(4, 4) *= corr * corr;
+      fTr.C(5, 4) *= corr;
     }
 
     /// apply energy loss correction to the track
@@ -746,8 +748,8 @@ namespace cbm::algo::kf
     /// \param radLen - radiation length of the material
     /// \param radThick - radiation length of the material
     /// \param direction - direction of the track
-//    void EnergyLossCorrection(int atomicZ, DataTscal atomicA, DataTscal rho, DataTscal radLen, DataT radThick,
-//                              FitDirection direction);
+    //    void EnergyLossCorrection(int atomicZ, DataTscal atomicA, DataTscal rho, DataTscal radLen, DataT radThick,
+    //                              FitDirection direction);
 
 
     /// apply multiple scattering correction to the track with the given Qp0
@@ -767,7 +769,7 @@ namespace cbm::algo::kf
       // DataT qpt   = qp * t;
 
       DataT lg = DataT(.0136) * (DataT(1.) + DataT(0.038) * log(radThick * t));
-//      lg       = kf::utils::iif(lg > DataT(0.), lg, DataT(0.));
+      //      lg       = kf::utils::iif(lg > DataT(0.), lg, DataT(0.));
       lg = iif_mask(lg > DataT(0.), lg, DataT(0.));
 
       DataT s0 = lg * qp * t;
@@ -782,9 +784,9 @@ namespace cbm::algo::kf
       // DataT a = ( (kONE+mass2*qp0*qp0t)*radThick*s0*s0 );
       // DataT a = ((t + fMass2 * qp0 * qp0t) * radThick * s0 * s0);
 
-//      fTr.C22() += kf::utils::iif(fMask, txtx1 * a, DataT(0.));
-//      fTr.C32() += kf::utils::iif(fMask, tx * ty * a, DataT(0.));
-//      fTr.C33() += kf::utils::iif(fMask, tyty1 * a, DataT(0.));
+      //      fTr.C22() += kf::utils::iif(fMask, txtx1 * a, DataT(0.));
+      //      fTr.C32() += kf::utils::iif(fMask, tx * ty * a, DataT(0.));
+      //      fTr.C33() += kf::utils::iif(fMask, tyty1 * a, DataT(0.));
       fTr.C(2, 2) += iif_mask(fMask, txtx1 * a, DataT(0.));
       fTr.C(3, 2) += iif_mask(fMask, tx * ty * a, DataT(0.));
       fTr.C(3, 3) += iif_mask(fMask, tyty1 * a, DataT(0.));
@@ -794,15 +796,15 @@ namespace cbm::algo::kf
     XPU_D void MultipleScattering(DataT radThick) { MultipleScattering(radThick, fTr.GetTx(), fTr.GetTy(), fQp0); }
 
     /// apply multiple scattering correction in thick material to the track
-//    void MultipleScatteringInThickMaterial(DataT radThick, DataT thickness, bool fDownstream);
+    //    void MultipleScatteringInThickMaterial(DataT radThick, DataT thickness, bool fDownstream);
 
     ///------------------------------------------------------------------
     /// special utilities needed by the combinatorial track finder
 
     /// extrapolate track as a line, return the extrapolated X, Y and the Jacobians
-//    void GetExtrapolatedXYline(DataT z, const kf::FieldRegion<DataT>& F, DataT& extrX, DataT& extrY,
-//                               std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jx,
-//                               std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jy) const;
+    //    void GetExtrapolatedXYline(DataT z, const kf::FieldRegion<DataT>& F, DataT& extrX, DataT& extrY,
+    //                               std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jx,
+    //                               std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jy) const;
 
     /// filter the track with the XY measurement placed at different Z
     /// \param m - measurement
@@ -810,28 +812,28 @@ namespace cbm::algo::kf
     /// \param extrY - extrapolated Y of the track
     /// \param Jx - Jacobian of the extrapolated X
     /// \param Jy - Jacobian of the extrapolated Y
-//    void FilterExtrapolatedXY(const kf::MeasurementXy<DataT>& m, DataT extrX, DataT extrY,
-//                              const std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jx,
-//                              const std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jy);
+    //    void FilterExtrapolatedXY(const kf::MeasurementXy<DataT>& m, DataT extrX, DataT extrY,
+    //                              const std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jx,
+    //                              const std::array<DataT, kf::TrackParam<DataT>::kNtrackParam>& Jy);
 
     /// extrapolate the track to the given Z using linearization at the straight line,
     /// \param z_out - Z coordinate to extrapolate to
     /// \return pair of the extrapolated X, and dX2 - the rms^2 of the extrapolated x
-//    std::pair<DataT, DataT> ExtrapolateLineXdX2(DataT z_out) const;
+    //    std::pair<DataT, DataT> ExtrapolateLineXdX2(DataT z_out) const;
 
     /// extrapolate the track to the given Z using linearization at the straight line,
     /// \param z_out - Z coordinate to extrapolate to
     /// \return pair of the extrapolated Y, and dY2 - the rms^2 of the extrapolated y
-//    std::pair<DataT, DataT> ExtrapolateLineYdY2(DataT z_out) const;
+    //    std::pair<DataT, DataT> ExtrapolateLineYdY2(DataT z_out) const;
 
     /// extrapolate the track to the given Z using linearization at the straight line,
     /// \param z_out - Z coordinate to extrapolate to
     /// \return extrapolated correlation cov<x,y>
-//    DataT ExtrapolateLineDxy(DataT z_out) const;
+    //    DataT ExtrapolateLineDxy(DataT z_out) const;
 
     /// add target measuremet to the track using linearisation at a straight line
-//    void FilterWithTargetAtLine(DataT targZ, const kf::MeasurementXy<DataT>& targXYInfo,
-//                                const kf::FieldRegion<DataT>& F);
+    //    void FilterWithTargetAtLine(DataT targZ, const kf::MeasurementXy<DataT>& targXYInfo,
+    //                                const kf::FieldRegion<DataT>& F);
 
     /// \brief Approximate mean energy loss with Bethe-Bloch formula
     /// \param bg2 (beta*gamma)^2
@@ -873,12 +875,12 @@ namespace cbm::algo::kf
       cnst lhwI = log(28.816f * 1e-9f * sqrt(rho * mZA) / mI);
 
       DataTmask init = x > x1;
-//      d2             = kf::utils::iif(init, lhwI + x - 0.5f, DataT(0.));
-      d2             = iif_mask(init, lhwI + x - 0.5f, DataT(0.));
-      cnst r         = (x1 - x) / (x1 - x0);
-      init           = (x > x0) & (x1 > x);
-//      d2             = kf::utils::iif(init, lhwI + x - 0.5f + (0.5f - lhwI - x0) * r * r * r, d2);
-      d2             = iif_mask(init, lhwI + x - 0.5f + (0.5f - lhwI - x0) * r * r * r, d2);
+      //      d2             = kf::utils::iif(init, lhwI + x - 0.5f, DataT(0.));
+      d2     = iif_mask(init, lhwI + x - 0.5f, DataT(0.));
+      cnst r = (x1 - x) / (x1 - x0);
+      init   = (x > x0) & (x1 > x);
+      //      d2             = kf::utils::iif(init, lhwI + x - 0.5f + (0.5f - lhwI - x0) * r * r * r, d2);
+      d2 = iif_mask(init, lhwI + x - 0.5f + (0.5f - lhwI - x0) * r * r * r, d2);
 
       return mK * mZA * (DataT(1.f) + bg2) / bg2
              * (0.5f * log(_2me * bg2 * maxT / (mI * mI)) - bg2 / (DataT(1.f) + bg2) - d2);
@@ -892,7 +894,7 @@ namespace cbm::algo::kf
     /// \param kp3 mean excitation energy [GeV]
     /// \param kp4 mean Z/A
     /// \return mean energy loss
-//    static DataT ApproximateBetheBloch(DataT bg2, DataT kp0, DataT kp1, DataT kp2, DataT kp3, DataT kp4);
+    //    static DataT ApproximateBetheBloch(DataT bg2, DataT kp0, DataT kp1, DataT kp2, DataT kp3, DataT kp4);
 
     /// \brief git two chi^2 components of the track fit to measurement
     /// \param m - measurement
@@ -903,8 +905,8 @@ namespace cbm::algo::kf
     /// \param C11 - track covariance C11
     /// \return pair of (chi^2_x, chi^2_u) components of the chi^2.
     ///         chi^2_u is calculated after track is fit to the X measurement
-//    static std::tuple<DataT, DataT> GetChi2XChi2U(kf::MeasurementXy<DataT> m, DataT x, DataT y, DataT C00, DataT C10,
-//                                                  DataT C11);
+    //    static std::tuple<DataT, DataT> GetChi2XChi2U(kf::MeasurementXy<DataT> m, DataT x, DataT y, DataT C00, DataT C10,
+    //                                                  DataT C11);
 
     /// \brief fast guess of track parameterts based on its hits
     /// \param trackZ - Z coordinate of the track
@@ -916,8 +918,9 @@ namespace cbm::algo::kf
     /// \param hitW - hit weight
     /// \param hitWtime - hit weight for the time measurement
     /// \param NHits - number of hits
-    XPU_D void GuessTrack(const DataT& trackZ, const DataT hitX[], const DataT hitY[], const DataT hitZ[], const DataT hitT[],
-                    const DataT By[], const DataTmask hitW[], const DataTmask hitWtime[], int NHits)
+    XPU_D void GuessTrack(const DataT& trackZ, const DataT hitX[], const DataT hitY[], const DataT hitZ[],
+                          const DataT hitT[], const DataT By[], const DataTmask hitW[], const DataTmask hitWtime[],
+                          int NHits)
     {
       // gives nice initial approximation for x,y,tx,ty - almost same as KF fit. qp - is shifted by 4%, resid_ual - ~3.5% (KF fit resid_ual - 1%).
 
@@ -1054,51 +1057,50 @@ namespace cbm::algo::kf
     kf::TrackParam<DataT> fTr;  ///< track parameters
     DataT fQp0;
 
-    DataT fMass;      ///< particle mass (muon mass by default)
+    DataT fMass;   ///< particle mass (muon mass by default)
     DataT fMass2;  ///< mass squared
 
     DataT fMaxExtraplationStep;  ///< max extrapolation step [cm]
 
     bool fDoFitVelocity;  // should the track velocity be fitted as an independent parameter
-
-  } _fvecalignment;
+  };
 
   // =============================================================================================
 
-//  template<typename DataT>
-//  inline std::string GpuTrackKalmanFilter<DataT>::ToString(int i)
-//  {
-//    return fTr.ToString(i);
-//  }
-//
-//
-//  template<typename DataT>
-//  inline void GpuTrackKalmanFilter<DataT>::SetOneEntry(const int i0, const GpuTrackKalmanFilter& T1, const int i1)
-//  {
-//    fTr.SetOneEntry(i0, T1.fTr, i1);
-//    kf::utils::VecCopy<DataT, DataT, false, false>::CopyEntries(fQp0, i0, T1.fQp0, i1);
-//  }
-//
-//  template<typename DataT>
-//  inline std::pair<DataT, DataT> GpuTrackKalmanFilter<DataT>::ExtrapolateLineXdX2(DataT z_out) const
-//  {
-//    DataT dz = (z_out - fTr.GetZ());
-//    return std::pair(fTr.GetX() + fTr.GetTx() * dz, fTr.C00() + dz * (2 * fTr.C20() + dz * fTr.C22()));
-//  }
-//
-//  template<typename DataT>
-//  inline std::pair<DataT, DataT> GpuTrackKalmanFilter<DataT>::ExtrapolateLineYdY2(DataT z_out) const
-//  {
-//    DataT dz = (z_out - fTr.GetZ());
-//    return std::pair(fTr.GetY() + fTr.GetTy() * dz, fTr.C11() + dz * (DataT(2.) * fTr.C31() + dz * fTr.C33()));
-//  }
-//
-//  template<typename DataT>
-//  inline DataT GpuTrackKalmanFilter<DataT>::ExtrapolateLineDxy(DataT z_out) const
-//  {
-//    DataT dz = (z_out - fTr.GetZ());
-//    return fTr.C10() + dz * (fTr.C21() + fTr.C30() + dz * fTr.C32());
-//  }
+  //  template<typename DataT>
+  //  inline std::string GpuTrackKalmanFilter<DataT>::ToString(int i)
+  //  {
+  //    return fTr.ToString(i);
+  //  }
+  //
+  //
+  //  template<typename DataT>
+  //  inline void GpuTrackKalmanFilter<DataT>::SetOneEntry(const int i0, const GpuTrackKalmanFilter& T1, const int i1)
+  //  {
+  //    fTr.SetOneEntry(i0, T1.fTr, i1);
+  //    kf::utils::VecCopy<DataT, DataT, false, false>::CopyEntries(fQp0, i0, T1.fQp0, i1);
+  //  }
+  //
+  //  template<typename DataT>
+  //  inline std::pair<DataT, DataT> GpuTrackKalmanFilter<DataT>::ExtrapolateLineXdX2(DataT z_out) const
+  //  {
+  //    DataT dz = (z_out - fTr.GetZ());
+  //    return std::pair(fTr.GetX() + fTr.GetTx() * dz, fTr.C00() + dz * (2 * fTr.C20() + dz * fTr.C22()));
+  //  }
+  //
+  //  template<typename DataT>
+  //  inline std::pair<DataT, DataT> GpuTrackKalmanFilter<DataT>::ExtrapolateLineYdY2(DataT z_out) const
+  //  {
+  //    DataT dz = (z_out - fTr.GetZ());
+  //    return std::pair(fTr.GetY() + fTr.GetTy() * dz, fTr.C11() + dz * (DataT(2.) * fTr.C31() + dz * fTr.C33()));
+  //  }
+  //
+  //  template<typename DataT>
+  //  inline DataT GpuTrackKalmanFilter<DataT>::ExtrapolateLineDxy(DataT z_out) const
+  //  {
+  //    DataT dz = (z_out - fTr.GetZ());
+  //    return fTr.C10() + dz * (fTr.C21() + fTr.C30() + dz * fTr.C32());
+  //  }
   template class GpuTrackKalmanFilter<float>;
 
 }  // namespace cbm::algo::kf

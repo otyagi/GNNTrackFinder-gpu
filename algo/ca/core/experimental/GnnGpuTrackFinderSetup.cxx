@@ -426,5 +426,5 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   fGraphConstructor.fNTriplets.reset(frWData.Hits().size(), xpu::buf_io);
 
   // Initialize triplet fit params
-  // fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
 }
