@@ -63,6 +63,26 @@ namespace cbm::algo::kf
     /// It also works when T is scalar
     void Set(const TrackParamBase<fvec>& Tb, const int ib) { CopyBase<fvec, true, false>(0, Tb, ib); }
 
+    XPU_D inline void SetOneGpu(const TrackParamBase<float>& other)
+    {
+        fX = other.GetX();
+        fY = other.GetY();
+        fTx = other.GetTx();
+        fTy = other.GetTy();
+        fQp = other.GetQp();
+        fZ = other.GetZ();
+        fT = other.GetTime();
+        fVi = other.GetVi();
+
+        for (int i = 0; i < kNcovParam; ++i)
+            fCovMatrix[i] = other.GetCovMatrix()[i];
+
+        fChiSq     = other.GetChiSq();
+        fNdf       = other.GetNdf();
+        fChiSqTime = other.GetChiSqTime();
+        fNdfTime   = other.GetNdfTime();
+    }
+
     /// Set one SIMD entry from one SIMD entry of the other class
     /// It only works when T is fvec, TdataB is scalar
     template<typename T1>
@@ -459,7 +479,7 @@ namespace cbm::algo::kf
     /// \param j column
     /// \param val matrix element
     template<int i, int j>
-    T& C()
+    XPU_D T& C()
     {
       constexpr int ind = (j <= i) ? i * (1 + i) / 2 + j : j * (1 + j) / 2 + i;
       return fCovMatrix[ind];
@@ -467,61 +487,61 @@ namespace cbm::algo::kf
 
     /// \brief Individual references to covariance matrix elements
     ///
-    T& C00() { return C<0, 0>(); }
-    T& C01() { return C<0, 1>(); }
-    T& C02() { return C<0, 2>(); }
-    T& C03() { return C<0, 3>(); }
-    T& C04() { return C<0, 4>(); }
-    T& C05() { return C<0, 5>(); }
-    T& C06() { return C<0, 6>(); }
+    XPU_D T& C00() { return C<0, 0>(); }
+    XPU_D T& C01() { return C<0, 1>(); }
+    XPU_D T& C02() { return C<0, 2>(); }
+    XPU_D T& C03() { return C<0, 3>(); }
+    XPU_D T& C04() { return C<0, 4>(); }
+    XPU_D T& C05() { return C<0, 5>(); }
+    XPU_D T& C06() { return C<0, 6>(); }
 
-    T& C10() { return C<1, 0>(); }
-    T& C11() { return C<1, 1>(); }
-    T& C12() { return C<1, 2>(); }
-    T& C13() { return C<1, 3>(); }
-    T& C14() { return C<1, 4>(); }
-    T& C15() { return C<1, 5>(); }
-    T& C16() { return C<1, 6>(); }
+    XPU_D T& C10() { return C<1, 0>(); }
+    XPU_D T& C11() { return C<1, 1>(); }
+    XPU_D T& C12() { return C<1, 2>(); }
+    XPU_D T& C13() { return C<1, 3>(); }
+    XPU_D T& C14() { return C<1, 4>(); }
+    XPU_D T& C15() { return C<1, 5>(); }
+    XPU_D T& C16() { return C<1, 6>(); }
 
-    T& C20() { return C<2, 0>(); }
-    T& C21() { return C<2, 1>(); }
-    T& C22() { return C<2, 2>(); }
-    T& C23() { return C<2, 3>(); }
-    T& C24() { return C<2, 4>(); }
-    T& C25() { return C<2, 5>(); }
-    T& C26() { return C<2, 6>(); }
+    XPU_D T& C20() { return C<2, 0>(); }
+    XPU_D T& C21() { return C<2, 1>(); }
+    XPU_D T& C22() { return C<2, 2>(); }
+    XPU_D T& C23() { return C<2, 3>(); }
+    XPU_D T& C24() { return C<2, 4>(); }
+    XPU_D T& C25() { return C<2, 5>(); }
+    XPU_D T& C26() { return C<2, 6>(); }
 
-    T& C30() { return C<3, 0>(); }
-    T& C31() { return C<3, 1>(); }
-    T& C32() { return C<3, 2>(); }
-    T& C33() { return C<3, 3>(); }
-    T& C34() { return C<3, 4>(); }
-    T& C35() { return C<3, 5>(); }
-    T& C36() { return C<3, 6>(); }
+    XPU_D T& C30() { return C<3, 0>(); }
+    XPU_D T& C31() { return C<3, 1>(); }
+    XPU_D T& C32() { return C<3, 2>(); }
+    XPU_D T& C33() { return C<3, 3>(); }
+    XPU_D T& C34() { return C<3, 4>(); }
+    XPU_D T& C35() { return C<3, 5>(); }
+    XPU_D T& C36() { return C<3, 6>(); }
 
-    T& C40() { return C<4, 0>(); }
-    T& C41() { return C<4, 1>(); }
-    T& C42() { return C<4, 2>(); }
-    T& C43() { return C<4, 3>(); }
-    T& C44() { return C<4, 4>(); }
-    T& C45() { return C<4, 5>(); }
-    T& C46() { return C<4, 6>(); }
+    XPU_D T& C40() { return C<4, 0>(); }
+    XPU_D T& C41() { return C<4, 1>(); }
+    XPU_D T& C42() { return C<4, 2>(); }
+    XPU_D T& C43() { return C<4, 3>(); }
+    XPU_D T& C44() { return C<4, 4>(); }
+    XPU_D T& C45() { return C<4, 5>(); }
+    XPU_D T& C46() { return C<4, 6>(); }
 
-    T& C50() { return C<5, 0>(); }
-    T& C51() { return C<5, 1>(); }
-    T& C52() { return C<5, 2>(); }
-    T& C53() { return C<5, 3>(); }
-    T& C54() { return C<5, 4>(); }
-    T& C55() { return C<5, 5>(); }
-    T& C56() { return C<5, 6>(); }
+    XPU_D T& C50() { return C<5, 0>(); }
+    XPU_D T& C51() { return C<5, 1>(); }
+    XPU_D T& C52() { return C<5, 2>(); }
+    XPU_D T& C53() { return C<5, 3>(); }
+    XPU_D T& C54() { return C<5, 4>(); }
+    XPU_D T& C55() { return C<5, 5>(); }
+    XPU_D T& C56() { return C<5, 6>(); }
 
-    T& C60() { return C<6, 0>(); }
-    T& C61() { return C<6, 1>(); }
-    T& C62() { return C<6, 2>(); }
-    T& C63() { return C<6, 3>(); }
-    T& C64() { return C<6, 4>(); }
-    T& C65() { return C<6, 5>(); }
-    T& C66() { return C<6, 6>(); }
+    XPU_D T& C60() { return C<6, 0>(); }
+    XPU_D T& C61() { return C<6, 1>(); }
+    XPU_D T& C62() { return C<6, 2>(); }
+    XPU_D T& C63() { return C<6, 3>(); }
+    XPU_D T& C64() { return C<6, 4>(); }
+    XPU_D T& C65() { return C<6, 5>(); }
+    XPU_D T& C66() { return C<6, 6>(); }
 
 
     ///---------------------------------------------------------------------------------------------------------------------

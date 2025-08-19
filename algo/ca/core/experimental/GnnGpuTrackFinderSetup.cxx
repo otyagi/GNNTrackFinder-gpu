@@ -194,17 +194,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   }
 
   bool isCpu  = xpu::device::active().backend() == xpu::cpu;
-  int nBlocks = isCpu ? fNHits : std::ceil(float(fNHits) / float(kEmbedHitsBlockSize));
-  //nBlocks = 1;
 
-  int nBlocksCD =
-    nBlocks
-    * constants::gpu::
-      MaxDoubletsFromHit;  //std::ceil(float(nBlocks * maxDoubletsFromHit) / float(kSingletConstructorBlockSize));
-
-  //***
-  fGraphConstructor.fvTrackParams.reset(frWData.Hits().size(), xpu::buf_device);
-  //***
   fGraphConstructor.fIteration = fIteration;
 
   xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
@@ -436,5 +426,5 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   fGraphConstructor.fNTriplets.reset(frWData.Hits().size(), xpu::buf_io);
 
   // Initialize triplet fit params
-  fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
+  // fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
 }

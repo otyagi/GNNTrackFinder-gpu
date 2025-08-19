@@ -10,6 +10,7 @@
 
 #pragma once  // include this header only once per compilation unit
 
+#include "CaDefs.h"
 #include "CaGpuField.h"
 #include "CaStation.h"
 
@@ -17,6 +18,8 @@
 
 namespace cbm::algo::ca
 {
+  enum class EDetectorID;
+
   /// Structure Station
   /// Contains a set of geometry parameters for a particular station
   ///
@@ -28,6 +31,7 @@ namespace cbm::algo::ca
     float fZ;         ///< z position of station     [cm]
     float Xmax;       ///< min radius of the station [cm]
     float Ymax;       ///< max radius of the station [cm]
+    EDetectorID fDetectorID;
 
     GpuFieldSlice fieldSlice;  ///< Magnetic field near the station
 
@@ -69,6 +73,9 @@ namespace cbm::algo::ca
 
     /// \brief Gets limit of the station size in y-axis direction
     XPU_D float GetYmin() const { return -Ymax; }
+
+    /// \brief Gets detectorID
+    XPU_D EDetectorID GetDetectorID() const { return fDetectorID; }
   };
 
 }  // namespace cbm::algo::ca

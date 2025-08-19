@@ -7,6 +7,7 @@
 
 #pragma once  // include this header only once per compilation unit
 
+#include "CaDefs.h"
 #include "CaGpuField.h"
 #include "CaGpuMaterialMap.h"
 #include "CaGpuStation.h"
@@ -17,8 +18,12 @@
 
 namespace cbm::algo::ca
 {
+  enum class EDetectorID;
 
   class GpuParameters {
+
+    using DetectorID_t = std::underlying_type_t<EDetectorID>;
+
    public:
     /// \brief Default constructor
     GpuParameters() = default;
@@ -34,6 +39,9 @@ namespace cbm::algo::ca
       , tripletChi2Cut(5)
       , tripletFinalChi2Cut(5)
       , fNStations(0)
+      , fMisalignmentX(other.GetMisalignmentX())
+      , fMisalignmentY(other.GetMisalignmentY())
+      , fMisalignmentT(other.GetMisalignmentT())
       , primaryFlag(true)
       , isTargetField(false)
     {
@@ -41,7 +49,9 @@ namespace cbm::algo::ca
       fTargetPos[1] = kf::utils::simd::Cast<DataIn, float>(other.GetTargetPositionY());
       fTargetPos[2] = kf::utils::simd::Cast<DataIn, float>(other.GetTargetPositionZ());
       for (size_t i = 0; i < (size_t) other.GetNstationsActive(); i++) {
-        fStations[i] = other.GetStation(i);
+        fStations[i]                 = other.GetStation(i);
+        auto [detSystemId, iStLocal] = other.GetActiveSetup().GetIndexMap().template GlobalToLocal<EDetectorID>(i);
+        fStations[i].fDetectorID     = detSystemId;
       }
     }
 
@@ -67,6 +77,27 @@ namespace cbm::algo::ca
     /// \brief Gets Z component of target position
     XPU_D float GetTargetPositionZ() const { return fTargetPos[2]; }
 
+    /// \brief Gets misalignment of the detector systems in X, squared rms
+    XPU_D float GetMisalignmentXsq(EDetectorID detId) const
+    {
+      auto iDet = static_cast<DetectorID_t>(detId);
+      return fMisalignmentX[iDet] * fMisalignmentX[iDet];
+    }
+
+    /// \brief Gets misalignment of the detector systems in Y, squared rms
+    XPU_D float GetMisalignmentYsq(EDetectorID detId) const
+    {
+      auto iDet = static_cast<DetectorID_t>(detId);
+      return fMisalignmentY[iDet] * fMisalignmentY[iDet];
+    }
+
+    /// \brief Gets miscalibration of the detector systems in Time, squared rms
+    XPU_D float GetMisalignmentTsq(EDetectorID detId) const
+    {
+      auto iDet = static_cast<DetectorID_t>(detId);
+      return fMisalignmentT[iDet] * fMisalignmentT[iDet];
+    }
+
     std::array<ca::GpuStation, constants::gpu::MaxNofStations> fStations;  ///< Array of stations
 
     std::array<float, 3> fTargetPos;  ///< Target position
@@ -78,6 +109,15 @@ namespace cbm::algo::ca
     float doubletChi2Cut;       ///< Doublet chi2 cut
     float tripletChi2Cut;       ///< Triplet chi2 cut
     float tripletFinalChi2Cut;  ///< Triplet final chi2 cut
+
+    /// misalignment of the detector systems in X
+    std::array<float, constants::size::MaxNdetectors> fMisalignmentX;
+
+    /// misalignment of the detector systems in Y
+    std::array<float, constants::size::MaxNdetectors> fMisalignmentY;
+
+    /// miscalibration of the detector systems in Time
+    std::array<float, constants::size::MaxNdetectors> fMisalignmentT;
 
     size_t fNStations;  ///< Number of stations
 

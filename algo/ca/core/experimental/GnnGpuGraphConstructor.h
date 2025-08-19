@@ -18,6 +18,7 @@
 #include "GnnGpuEmbedNet.h"
 #include "KfMeasurementU.h"
 #include "CaGpuField.h"
+// #include "KfGpuTrackKalmanFilter.h"
 
 #include <xpu/device.h>
 #include <xpu/host.h>
@@ -65,19 +66,19 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
-  struct FitTripletsOT1 : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
-    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
-    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
-    XPU_D void operator()(context& ctx);
-  };
+  // struct FitTripletsOT : xpu::kernel<GPUReco> {
+  //   using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+  //   using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+  //   using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+  //   XPU_D void operator()(context& ctx);
+  // };
 
-  struct FitTripletsOT2 : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
-    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
-    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
-    XPU_D void operator()(context& ctx);
-  };
+  // struct FitTripletsOT2 : xpu::kernel<GPUReco> {
+  //   using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+  //   using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+  //   using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+  //   XPU_D void operator()(context& ctx);
+  // };
 
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
@@ -97,9 +98,9 @@ namespace cbm::algo::ca
 
     XPU_D void MakeTripletsOT(MakeTripletsOT::context&) const;
 
-    XPU_D void FitTripletsOT1(FitTripletsOT1::context&) const;
+    // XPU_D void FitTripletsOT(FitTripletsOT::context&) const;
 
-    XPU_D void FitTripletsOT2(FitTripletsOT2::context&) const;
+    // XPU_D void FitTripletsOT2(FitTripletsOT2::context&) const;
 
 
    private:
@@ -162,8 +163,7 @@ namespace cbm::algo::ca
     xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
 
     // triplet fitting
-    xpu::buffer<kf::TrackParamBase<float>> fvTripletParams;          ///< Triplet parameters
-
+    // xpu::buffer<std::array<kf::TrackParamBase<float>, kNNOrder * kNNOrder>> fvTripletParams;          ///< Triplet parameters
 
   };
 
