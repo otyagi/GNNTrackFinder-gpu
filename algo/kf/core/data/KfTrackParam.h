@@ -19,6 +19,10 @@
 
 #include <string>
 
+// #if !defined(NO_ROOT) && !XPU_IS_HIP_CUDA
+// #include <Rtypes.h>  // for ClassDef
+// #endif
+
 #include <xpu/device.h>
 
 namespace cbm::algo::kf
@@ -223,100 +227,100 @@ namespace cbm::algo::kf
     ///  Some of them involve calculations
 
     /// \brief Gets z position [cm]
-    XPU_D T GetZ() const { return fZ; }
+    XPU_D XPU_H T GetZ() const { return fZ; }
 
     /// \brief Gets x position [cm]
-    XPU_D T GetX() const { return fX; }
+    XPU_D XPU_H T GetX() const { return fX; }
 
     /// \brief Gets x position error [cm]
-    XPU_D T GetXError() const { return sqrt(C00()); }
+    XPU_D XPU_H T GetXError() const { return sqrt(C00()); }
 
     /// \brief Gets y position [cm]
-    XPU_D T GetY() const { return fY; }
+    XPU_D XPU_H T GetY() const { return fY; }
 
     /// \brief Gets y position error [cm]
-    XPU_D T GetYError() const { return sqrt(C11()); }
+    XPU_D XPU_H T GetYError() const { return sqrt(C11()); }
 
     /// \brief Gets slope along x-axis
-    XPU_D T GetTx() const { return fTx; }
+    XPU_D XPU_H T GetTx() const { return fTx; }
 
     /// \brief Gets error of slope along x-axis
-    XPU_D T GetTxError() const { return sqrt(C22()); }
+    XPU_D XPU_H T GetTxError() const { return sqrt(C22()); }
 
     /// \brief Gets slope along y-axis
-    XPU_D T GetTy() const { return fTy; }
+    XPU_D XPU_H T GetTy() const { return fTy; }
 
     /// \brief Gets error of slope along y-axis
-    XPU_D T GetTyError() const { return sqrt(C33()); }
+    XPU_D XPU_H T GetTyError() const { return sqrt(C33()); }
 
     /// \brief Gets charge over momentum [ec/GeV]
-    XPU_D T GetQp() const { return fQp; }
+    XPU_D XPU_H T GetQp() const { return fQp; }
 
     /// \brief Gets error of charge over momentum [ec/GeV]
-    XPU_D T GetQpError() const { return sqrt(C44()); }
+    XPU_D XPU_H T GetQpError() const { return sqrt(C44()); }
 
     /// \brief Gets time [ns]
-    XPU_D T GetTime() const { return fT; }
+    XPU_D XPU_H T GetTime() const { return fT; }
 
     /// \brief Gets time error [ns]
-    XPU_D T GetTimeError() const { return sqrt(C55()); }
+    XPU_D XPU_H T GetTimeError() const { return sqrt(C55()); }
 
     /// \brief Gets inverse velocity [ns/cm] in downstream direction
-    XPU_D T GetVi() const { return fVi; }
+    XPU_D XPU_H T GetVi() const { return fVi; }
 
     /// \brief Gets inverse velocity error [ns/cm]
-    XPU_D T GetViError() const { return sqrt(C66()); }
+    XPU_D XPU_H T GetViError() const { return sqrt(C66()); }
 
     /// \brief Gets covariance matrix
-    XPU_D const CovMatrix_t& GetCovMatrix() const { return fCovMatrix; }
+    XPU_D XPU_H const CovMatrix_t& GetCovMatrix() const { return fCovMatrix; }
 
     /// \brief Get covariance matrix element
     /// \param i row
     /// \param j column
     /// \return covariance matrix element
-    XPU_D T GetCovariance(int i, int j) const { return C(i, j); }
+    XPU_D XPU_H T GetCovariance(int i, int j) const { return C(i, j); }
 
     /// Gets Chi-square of track fit model
-    XPU_D T GetChiSq() const { return fChiSq; }
+    XPU_D XPU_H T GetChiSq() const { return fChiSq; }
 
     /// Gets NDF of track fit model
-    XPU_D T GetNdf() const { return fNdf; }
+    XPU_D XPU_H T GetNdf() const { return fNdf; }
 
     /// Gets Chi-square of time measurements
-    XPU_D T GetChiSqTime() const { return fChiSqTime; }
+    XPU_D XPU_H T GetChiSqTime() const { return fChiSqTime; }
 
     /// Gets NDF of time measurements
-    XPU_D T GetNdfTime() const { return fNdfTime; }
+    XPU_D XPU_H T GetNdfTime() const { return fNdfTime; }
 
     /// Gets charge
-    XPU_D T GetCharge() const { return utils::iif(GetQp() > T(0.), T(1.), T(-1.)); }
+    XPU_D XPU_H T GetCharge() const { return utils::iif(GetQp() > T(0.), T(1.), T(-1.)); }
 
     /// \brief Gets azimuthal angle [rad]
-    XPU_D T GetPhi() const { return atan2(GetTy(), GetTx()); }
+    XPU_D XPU_H T GetPhi() const { return atan2(GetTy(), GetTx()); }
 
     /// \brief Gets azimuthal angle error [rad]
-    XPU_D T GetPhiError() const;
+    XPU_D XPU_H T GetPhiError() const;
 
     /// \brief Gets polar angle [rad]
-    XPU_D T GetTheta() const { return atan(sqrt(GetTx() * GetTx() + GetTy() * GetTy())); }
+    XPU_D XPU_H T GetTheta() const { return atan(sqrt(GetTx() * GetTx() + GetTy() * GetTy())); }
 
     /// \brief Gets polar angle error [rad]
-    XPU_D T GetThetaError() const;
+    XPU_D XPU_H T GetThetaError() const;
 
     /// Gets momentum [GeV/ec]. For the straight tracks returns 1.e4 [GeV/ec]
-    XPU_D T GetP() const { return utils::iif(utils::fabs(GetQp()) > T(1.e-4), T(1.) / utils::fabs(GetQp()), T(1.e4)); }
+    XPU_D XPU_H T GetP() const { return utils::iif(utils::fabs(GetQp()) > T(1.e-4), T(1.) / utils::fabs(GetQp()), T(1.e4)); }
 
     /// Gets z-component of the momentum [GeV/ec]
-    XPU_D T GetPz() const { return GetP() / sqrt(T(1.) + GetTx() * GetTx() + GetTy() * GetTy()); }
+    XPU_D XPU_H T GetPz() const { return GetP() / sqrt(T(1.) + GetTx() * GetTx() + GetTy() * GetTy()); }
 
     /// Gets x-component of the momentum [GeV/ec]
-    XPU_D T GetPx() const { return GetPz() * GetTx(); }
+    XPU_D XPU_H T GetPx() const { return GetPz() * GetTx(); }
 
     /// Gets y-component of the momentum [GeV/ec]
-    XPU_D T GetPy() const { return GetPz() * GetTy(); }
+    XPU_D XPU_H T GetPy() const { return GetPz() * GetTy(); }
 
     /// Gets transverse momentum
-    XPU_D T GetPt() const
+    XPU_D XPU_H T GetPt() const
     {
       T t2 = GetTx() * GetTx() + GetTy() * GetTy();
       return GetP() * sqrt(t2 / (T(1.) + t2));
@@ -644,6 +648,10 @@ namespace cbm::algo::kf
     T fChiSqTime{0.};  ///< chi^2 of track fit, time measurements
     T fNdfTime{0.};    ///< NDF of track fit, time measurements
 
+// #if !defined(NO_ROOT) && !XPU_IS_HIP_CUDA
+//     ClassDefNV(TrackParamBase, 1);
+// #endif
+
   };  // class TrackParamBase
 
 
@@ -659,6 +667,10 @@ namespace cbm::algo::kf
     /// ---------------------------------------------------------------------------------------------------------------------using
     /// \brief Gets pseudo-rapidity
     T GetEta() const { return -log(tan(this->GetTheta() * T(0.5))); }
+
+// #if !defined(NO_ROOT) && !XPU_IS_HIP_CUDA
+//     ClassDefNV(TrackParamBaseScalar, 1);
+// #endif
   };
 
 
@@ -672,12 +684,20 @@ namespace cbm::algo::kf
   class TrackParam : public TrackParamBaseScalar<T> {
    public:
     using TrackParamBaseScalar<T>::TrackParamBaseScalar;
+
+// #if !defined(NO_ROOT) && !XPU_IS_HIP_CUDA
+//     ClassDefNV(TrackParam, 1);
+// #endif
   };
 
   template<>
   class TrackParam<fvec> : public TrackParamBase<fvec> {
    public:
     using TrackParamBase<fvec>::TrackParamBase;
+
+// #if !defined(NO_ROOT) && !XPU_IS_HIP_CUDA
+//     ClassDefNV(TrackParam<fvec>, 1);
+// #endif
   };
 
 
@@ -693,7 +713,7 @@ namespace cbm::algo::kf
   /// ---------------------------------------------------------------------------------------------------------------------
   ///
   template<typename T>
-  XPU_D inline T TrackParamBase<T>::GetPhiError() const
+  XPU_D XPU_H inline T TrackParamBase<T>::GetPhiError() const
   {
     // phi = atan( tx / ty ); }
 
@@ -713,7 +733,7 @@ namespace cbm::algo::kf
   /// ---------------------------------------------------------------------------------------------------------------------
   ///
   template<typename T>
-  XPU_D inline T TrackParamBase<T>::GetThetaError() const
+  XPU_D XPU_H inline T TrackParamBase<T>::GetThetaError() const
   {
     // theta = atan(sqrt( tx * tx + ty * ty) )
 

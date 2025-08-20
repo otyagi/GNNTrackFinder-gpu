@@ -164,7 +164,7 @@ namespace cbm::algo::ca
 
     // triplet fitting
     xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected; // 1 where triplet passed KF fit check
-    xpu::buffer<std::array<kf::TrackParamBase<float>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
+    xpu::buffer<std::array<std::array<float, 7>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
   };
 
 }  // namespace cbm::algo::ca

@@ -180,7 +180,12 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const unsigned int iHitL         = xpu::floor(iGThread / NMaxTripletHit);
   const unsigned int nTripletsHitL = fNTriplets[iHitL];
   const unsigned int iTriplet      = iGThread % NMaxTripletHit;
-  if (iTriplet >= nTripletsHitL) return;  // empty triplet entry
+  if (iTriplet >= nTripletsHitL) {
+    std::array<float, 7> tripletParams{-100., -100., -100., -100., -100., -100., -100.};
+    fTripletsSelected[iGThread][iTriplet] = false;
+    fvTripletParams[iGThread][iTriplet]   = tripletParams;
+    return;
+  }
 
   // printf("iGThread: %d, iHitL: %d, iTriplet: %d ", iGThread, iHitL, iTriplet);
 
@@ -197,7 +202,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   kf::GpuTrackKalmanFilter<float> fit;
   // kf::TrackParamBase<float>& tr = fit.Tr();
   TrackParam<float>& tr = fit.Tr();
-  fit.SetParticleMass(fParams_const[fIteration].particleMass);
+  fit.SetParticleMass(constants::phys::MuonMass);
   fit.SetDoFitVelocity(true);
 
   const ca::GpuStation* sta[nStations];
@@ -372,7 +377,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
     fldZ1 = z[ista];
     fldB1 = sta[ista]->fieldSlice.GetFieldValue(tr.X(), tr.Y());
-    
+
     fldB1.Combine(fB[ista], w[ista]);
 
     fldZ2    = z[ista - 2];
@@ -398,7 +403,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
       fld1 = fld;
 
       fit.SetMask(initialised);
-      // fit.Extrapolate(z[ista], fld1);
+      fit.Extrapolate(z[ista], fld1);
       printf("Extrapolate: %d ", iGThread);
       auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
       fit.MultipleScattering(radThick);
@@ -535,206 +540,16 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     if (isPrimary != 1.0) killTrack = true;  // not primary track
   }
 
-  if (!killTrack) {
-    const float qp  = fit.Tr().Qp();
-    const float Cqp = fit.Tr().C44() + 0.001;  // 0.001 magic number added. (see triplet constructor)
-    const float Tx  = fit.Tr().Tx();
-    const float C22 = fit.Tr().C22();
-    const float Ty  = fit.Tr().Ty();
-    const float C33 = fit.Tr().C33();
-    std::array<float, 7> tripletParams{chi2, qp, Cqp, Tx, C22, Ty, C33};
-
-    // selectedTripletIndexes[iGThread] = true;
-    // selectedTripletParams[iGThread]  = tripletParams;
-  }
+  const float qp  = fit.Tr().Qp();
+  const float Cqp = fit.Tr().C44() + 0.001;  // 0.001 magic number added. (see triplet constructor)
+  const float Tx  = fit.Tr().Tx();
+  const float C22 = fit.Tr().C22();
+  const float Ty  = fit.Tr().Ty();
+  const float C33 = fit.Tr().C33();
+  std::array<float, 7> tripletParams{chi2, qp, Cqp, Tx, C22, Ty, C33};
+  fvTripletParams[iGThread][iTriplet]   = tripletParams;
+  fTripletsSelected[iGThread][iTriplet] = !killTrack;
 }  // FitTripletsOT
-
-
-// XPU_D void GnnGpuGraphConstructor::FitTripletsOT2(FitTripletsOT2::context& ctx) const
-// {
-//   const int iGThread       = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-//   const int NMaxTripletHit = kNNOrder * kNNOrder;
-//   if (iGThread >= fIterationData[0].fNHits * NMaxTripletHit) return;
-
-//   const unsigned int iHitL         = xpu::floor(iGThread / NMaxTripletHit);
-//   const unsigned int nTripletsHitL = fNTriplets[iHitL];
-//   const unsigned int iTriplet      = iGThread % NMaxTripletHit;
-//   if (iTriplet >= nTripletsHitL) return;  // empty triplet entry
-
-//   const std::array<unsigned int, 3> triplet = {iHitL, fTriplets[iHitL][iTriplet][0], fTriplets[iHitL][iTriplet][1]};
-
-//   const int nStations        = 12;
-//   const float threshold_chi2 = 19.5;  // def - 19.5
-//   const float threshold_qp   = 5.0f;  // def - 5.0f
-
-//   int ista[3] = {-1, -1, -1};
-//   ista[0] = fvHits[iHitL].Station();
-//   ista[1] = ista[0] + 1;
-//   ista[2] = ista[1] + 1;
-
-//   //  ca::GpuStation sta[3];
-//   const ca::GpuStation* sta[3];
-//   for (int is = 0; is < 3; ++is) {
-//     sta[is] = &fStations_const[ista[is]];
-//   };
-
-//   bool isMomentumFitted = ((sta[0]->fieldStatus != 0) || (sta[1]->fieldStatus != 0) || (sta[2]->fieldStatus != 0));
-
-//   float ndfTrackModel = 4;                    // straight line
-//   ndfTrackModel += isMomentumFitted ? 1 : 0;  // track with momentum
-
-//   const float maxQp = fParams[fIterationData[0].fIteration].maxQp;
-
-//   float x[3], y[3], z[3], t[3];
-//   float dt2[3];
-//   ca::MeasurementXy<float> mxy[3];
-
-//   for (int ih = 0; ih < 3; ++ih) {
-//     const ca::Hit& hit = fvHits[triplet[ih]];
-//     mxy[ih]            = ca::MeasurementXy<float>(hit.X(), hit.Y(), hit.dX2(), hit.dY2(), hit.dXY(), 1.f, 1.f);
-//     x[ih]   = hit.X();
-//     y[ih]   = hit.Y();
-//     z[ih]   = hit.Z();
-//     t[ih]   = hit.T();
-//     dt2[ih] = hit.dT2();
-//   };
-
-//   // find the field along the track
-//   ca::GpuFieldValue B[3];
-//   ca::GpuFieldRegion fld;
-//   ca::GpuFieldRegion fldTarget;
-
-//   float tx[3] = {(x[1] - x[0]) / (z[1] - z[0]), (x[2] - x[0]) / (z[2] - z[0]), (x[2] - x[1]) / (z[2] - z[1])};
-//   float ty[3] = {(y[1] - y[0]) / (z[1] - z[0]), (y[2] - y[0]) / (z[2] - z[0]), (y[2] - y[1]) / (z[2] - z[1])};
-//   for (int ih = 0; ih < 3; ++ih) {
-//     float dz = (sta[ih]->fZ - z[ih]);
-//     B[ih]    = sta[ih]->fieldSlice.GetFieldValue(x[ih] + tx[ih] * dz, y[ih] + ty[ih] * dz);
-//   };
-
-//   fld.Set(B[0], sta[0]->fZ, B[1], sta[1]->fZ, B[2], sta[2]->fZ);
-//   fldTarget.Set(fParams[fIterationData[0].fIteration].targB, fParams[fIterationData[0].fIteration].GetTargetPositionZ(),
-//                 B[0], sta[0]->fZ, B[1], sta[1]->fZ);
-
-//   kf::TrackParamBase<float>
-//     fit_params;  // = fvTrackParamsTriplets[iGThread];	//TODO: set all to 0 and recheck - done, no difference
-
-//   fit_params.ResetCovMatrix();
-
-//   // initial parameters
-//   {
-//     float dz01      = 1.f / (z[1] - z[0]);
-//     fit_params.Tx() = (x[1] - x[0]) * dz01;
-//     fit_params.Ty() = (y[1] - y[0]) * dz01;
-//     fit_params.Qp() = 0.f;
-//     fit_params.Vi() = 0.f;
-//   }
-
-//   bool not_fitted = false;
-//   float qp0       = 0;
-//   // repeat several times in order to improve the precision
-//   for (int iiter = 0; iiter < 2 /*nIterations*/; ++iiter) {
-//     // fit forward
-//     {
-//       qp0 = fit_params.GetQp();
-//       if (qp0 > maxQp) qp0 = maxQp;
-//       if (qp0 < -maxQp) qp0 = -maxQp;
-
-//       fit_params.Qp()   = 0.f;
-//       fit_params.Vi()   = 0.f;
-//       fit_params.X()    = x[0];
-//       fit_params.Y()    = y[0];
-//       fit_params.Z()    = z[0];
-//       fit_params.Time() = t[0];
-//       fit_params.ResetErrors(1.f, 1.f, 1.f, 1.f, 100., (sta[0]->timeInfo ? dt2[0] : 1.e6f), 1.e2f);
-//       fit_params.C(0, 0) = mxy[0].Dx2();
-//       fit_params.C(1, 0) = mxy[0].Dxy();
-//       fit_params.C(1, 1) = mxy[0].Dy2();
-
-//       fit_params.Ndf()     = -ndfTrackModel + 2;
-//       fit_params.NdfTime() = sta[0]->timeInfo ? 0 : -1;
-
-//       //  add the target constraint
-//       // FilterWithTargetAtLine(&fit_params, &fldTarget); // removed by OT
-
-//       for (int ih = 1; ih < 3; ++ih) {
-//         ExtrapolateStep(&fit_params, z[ih], qp0, &fld);
-
-//         //	Extrapolate(&fit_params, z[ih], 0.f, &fld);	//TODO: add qp0 instead of 0.f
-
-//         int bin       = fMaterialMap[ista[ih]].GetBin(fit_params.GetX(), fit_params.GetY());
-//         auto radThick = fMaterialMapTables[bin];
-
-//         MultipleScattering(&fit_params, radThick, qp0);  //TODO: why it was commented in original gpu code?
-
-//         float Tx    = fit_params.Tx();
-//         float Ty    = fit_params.Ty();
-//         float txtx  = Tx * Tx;
-//         float tyty  = Ty * Ty;
-//         float txtx1 = txtx + 1.f;
-//         float h     = txtx + tyty;
-//         float tt    = xpu::sqrt(txtx1 + tyty);
-//         float h2    = h * h;
-//         float qp0t  = qp0 * tt;
-//         float c1 = 0.0136f, c2 = c1 * 0.038f, c3 = c2 * 0.5f, c4 = -c3 * 0.5f, c5 = c3 * 0.333333f, c6 = -c3 * 0.25f;
-
-//         float s0 = (c1 + c2 * xpu::log(radThick) + c3 * h + h2 * (c4 + c5 * h + c6 * h2)) * qp0t;
-//         float a  = ((tt
-//                     + fParams[fIterationData[0].fIteration].particleMass
-//                         * fParams[fIterationData[0].fIteration].particleMass * qp0 * qp0t)
-//                    * radThick * s0 * s0);
-//         //        fit_params.C(2, 2) += 0.001;//txtx1 * a;	//TODO: check if it is needed. Switching on leads to the strong ghosts increase
-
-//         fit_params.C(3, 2) += Tx * Ty * a;
-//         fit_params.C(3, 3) += (1. + tyty) * a;
-
-//         EnergyLossCorrection(&fit_params, radThick, -1.f);
-//         FilterXY(&fit_params, mxy[ih]);
-//         FilterTime(&fit_params, t[ih], dt2[ih], sta[ih]->timeInfo);
-//       }
-//     }
-
-//     if (iiter == 1) break;
-
-//     // fit backward
-//     {
-//       qp0 = fit_params.GetQp();
-//       if (qp0 > maxQp) qp0 = maxQp;
-//       if (qp0 < -maxQp) qp0 = -maxQp;
-
-//       fit_params.X()    = x[2];
-//       fit_params.Y()    = y[2];
-//       fit_params.Z()    = z[2];
-//       fit_params.Time() = t[2];
-//       fit_params.Qp()   = 0.f;
-//       fit_params.Vi()   = 0.f;
-
-//       fit_params.ResetErrors(1.f, 1.f, 1.f, 1.f, 100., (sta[2]->timeInfo ? dt2[2] : 1.e6f), 1.e2f);
-
-//       fit_params.Ndf()     = -ndfTrackModel + 2;
-//       fit_params.NdfTime() = sta[2]->timeInfo ? 0 : -1;
-
-//       for (int ih = 1; ih >= 0; --ih) {
-//         ExtrapolateStep(&fit_params, z[ih], qp0, &fld);
-//         auto radThick = fMaterialMapTables[fMaterialMap[ista[ih]].GetBin(fit_params.GetX(), fit_params.GetY())];
-//         MultipleScattering(&fit_params, radThick, qp0);
-//         EnergyLossCorrection(&fit_params, radThick, 1.f);
-//         FilterXY(&fit_params, mxy[ih]);
-//         FilterTime(&fit_params, t[ih], dt2[ih], sta[ih]->timeInfo);
-//       }
-//     }
-//   }  // for iiter
-
-//   float chi2 = fit_params.GetChiSq() + fit_params.GetChiSqTime();
-
-//   if (chi2 > fParams[fIterationData[0].fIteration].tripletFinalChi2Cut || !xpu::isfinite(chi2) || chi2 < 0.f
-//       || not_fitted) {
-//     chi2 = -1.;
-//   }
-
-//   const float qp  = fit_params.GetQp();
-//   const float Cqp = fit_params.C(4, 4) + 0.001;
-// }
-
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const
 {
