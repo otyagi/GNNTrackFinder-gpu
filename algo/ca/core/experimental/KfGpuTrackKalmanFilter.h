@@ -475,8 +475,9 @@ namespace cbm::algo::kf
       //	}
       //	else {
       DataT sgn = iif_mask(fTr.GetZ() < z_out, DataT(1.), DataT(-1.));
-      while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {  //TODO: only for XPU
-        //	        !kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
+      // while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {  //TODO: only for XPU
+      while (iif_mask(fMask, xpu::abs(z_out - fTr.GetZ()), 0.f) > 1.e-6f){
+        //!kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
         DataT zNew = fTr.GetZ() + sgn * fMaxExtraplationStep;  // max. 50 cm step
         zNew       = iif_mask(sgn * (z_out - zNew) <= DataT(0.), z_out, zNew);
         ExtrapolateStep(zNew, F);

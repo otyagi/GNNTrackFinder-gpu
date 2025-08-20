@@ -262,7 +262,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
   //fmask isFieldPresent = fmask::Zero();
 
-  int nHitsTrack = 3;  // triplet
+  const int nHitsTrack = 3;  // triplet
   int iSta[constants::size::MaxNstations];
 
   // printf("Init hit info: %d ", iGThread);
@@ -398,13 +398,13 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
       bool initialised = (z[ista] < z_end) & (z_start <= z[ista]);
 
-      printf("intialised: %d , z[ista]: %f , z_start: %f , z_end: %f", initialised, z[ista], z_start, z_end);
+      // printf("intialised: %d , z[ista]: %f , z_start: %f , z_end: %f", initialised, z[ista], z_start, z_end);
 
       fld1 = fld;
 
       fit.SetMask(initialised);
       fit.Extrapolate(z[ista], fld1);
-      printf("Extrapolate: %d ", iGThread);
+      // printf("Extrapolate: %d ", iGThread);
       auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
       fit.MultipleScattering(radThick);
       fit.EnergyLossCorrection(radThick, kf::FitDirection::kUpstream);
@@ -522,7 +522,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     }
   }  // iter 1.5
 
-  printf("Track fitted: %d ", iGThread);
+  // printf("Track fitted: %d ", iGThread);
 
   /// if track chi2 per dof is larger than threshold. Also kill negative and non-finite values
   /// if track p low than threshold_qp, then kill the track
