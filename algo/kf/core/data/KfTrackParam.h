@@ -268,7 +268,7 @@ namespace cbm::algo::kf
     XPU_D T GetViError() const { return sqrt(C66()); }
 
     /// \brief Gets covariance matrix
-    const CovMatrix_t& GetCovMatrix() const { return fCovMatrix; }
+    XPU_D const CovMatrix_t& GetCovMatrix() const { return fCovMatrix; }
 
     /// \brief Get covariance matrix element
     /// \param i row

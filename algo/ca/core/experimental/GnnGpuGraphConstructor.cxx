@@ -7,7 +7,7 @@
 
 #include "GnnGpuGraphConstructor.h"
 
-#include <stdio.h>
+#include <stdio.h>  // for debugging
 // printf ("iGThread: %d ...", iGThread);
 
 using namespace cbm::algo::ca;
@@ -182,6 +182,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const unsigned int iTriplet      = iGThread % NMaxTripletHit;
   if (iTriplet >= nTripletsHitL) return;  // empty triplet entry
 
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d ", iGThread, iHitL, iTriplet);
+
   const std::array<unsigned int, 3> triplet = {iHitL, fTriplets[iHitL][iTriplet][0], fTriplets[iHitL][iTriplet][1]};
 
   const int nStations        = 12;
@@ -189,22 +191,14 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const float threshold_qp   = 5.0f;  // def - 5.0f
 
   // ----- start fixing here
-  int start_hit = 0;  // for interation in wData.RecoHitIndices()
-
   ca::GpuFieldValue fldB0, fldB1, fldB2;
-  ca::GpuFieldRegion fld;
-
-  ca::GpuFieldValue fldB01, fldB11, fldB21;
-  ca::GpuFieldRegion fld1;
-
-  int nTracks_SIMD = 1;
+  ca::GpuFieldRegion fld, fld1;
 
   kf::GpuTrackKalmanFilter<float> fit;
-  kf::TrackParamBase<float>& tr = fit.Tr();
+  // kf::TrackParamBase<float>& tr = fit.Tr();
+  TrackParam<float>& tr = fit.Tr();
   fit.SetParticleMass(fParams_const[fIteration].particleMass);
   fit.SetDoFitVelocity(true);
-
-  // Track* t{nullptr}; //
 
   const ca::GpuStation* sta[nStations];
   for (int is = 0; is < nStations; ++is) {
@@ -237,15 +231,13 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   bool w[constants::size::MaxNstations];
   bool w_time[constants::size::MaxNstations];  // !!!
 
-  float y_temp;
-  float x_temp;
   float fldZ0;
   float fldZ1;
   float fldZ2;
   float z_start;
   float z_end;
 
-  ca::GpuFieldValue fB[constants::size::MaxNstations], fB_temp;
+  ca::GpuFieldValue fB[constants::size::MaxNstations];
 
   float ZSta[constants::size::MaxNstations];
   for (int ista = 0; ista < nStations; ista++) {
@@ -253,12 +245,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     mxy[ista].SetCov(1., 0., 1.);
   }
 
-  unsigned int N_vTracks = 1;
-
   // OT added
   float isPrimary = 0;  // set using fitPV info
-
-  // t[i] = &tripletCandidates[itrack + i];
 
   // get hits of current track
   for (int ista = 0; ista < nStations; ista++) {
@@ -272,8 +260,9 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   int nHitsTrack = 3;  // triplet
   int iSta[constants::size::MaxNstations];
 
-  for (int ih = 0; ih < nHitsTrack; ih++) {
+  // printf("Init hit info: %d ", iGThread);
 
+  for (int ih = 0; ih < nHitsTrack; ih++) {
     const ca::Hit& hit = fvHits[triplet[ih]];
     const int ista     = hit.Station();
     auto detSystemId   = sta[ista]->GetDetectorID();
@@ -304,7 +293,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
       dt2[ista] = 1.e4;
     }
     z[ista]          = hit.Z();
-    fB_temp          = sta[ista]->fieldSlice.GetFieldValue(x[ista], y[ista]);
+    fB[ista]         = sta[ista]->fieldSlice.GetFieldValue(x[ista], y[ista]);
     mxy[ista].X()    = hit.X();
     mxy[ista].Y()    = hit.Y();
     mxy[ista].Dx2()  = dX2Orig;
@@ -312,41 +301,42 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     mxy[ista].Dxy()  = dXYOrig;
     mxy[ista].NdfX() = 1.;
     mxy[ista].NdfY() = 1.;
+  }  // ih
 
-    fB[ista].x = fB_temp.x;
-    fB[ista].y = fB_temp.y;
-    fB[ista].z = fB_temp.z;
+  {
+    const ca::Hit& f_hit = fvHits[triplet[0]];
+    const int f_ista     = f_hit.Station();
+    z_start              = z[f_ista];
+    x_first              = x[f_ista];
+    y_first              = y[f_ista];
+    time_first           = time[f_ista];
+    wtime_first          = sta[f_ista]->timeInfo ? 1. : 0.;
+    dt2_first            = dt2[f_ista];
+    mxy_first.X()        = mxy[f_ista].X();
+    mxy_first.Y()        = mxy[f_ista].Y();
+    mxy_first.Dx2()      = mxy[f_ista].Dx2();
+    mxy_first.Dy2()      = mxy[f_ista].Dy2();
+    mxy_first.Dxy()      = mxy[f_ista].Dxy();
+    mxy_first.NdfX()     = mxy[f_ista].NdfX();
+    mxy_first.NdfY()     = mxy[f_ista].NdfY();
+  }
 
-    if (ih == 0) {
-      z_start          = z[ista];
-      x_first          = x[ista];
-      y_first          = y[ista];
-      time_first       = time[ista];
-      wtime_first      = sta[ista]->timeInfo ? 1. : 0.;
-      dt2_first        = dt2[ista];
-      mxy_first.X()    = mxy[ista].X();
-      mxy_first.Y()    = mxy[ista].Y();
-      mxy_first.Dx2()  = mxy[ista].Dx2();
-      mxy_first.Dy2()  = mxy[ista].Dy2();
-      mxy_first.Dxy()  = mxy[ista].Dxy();
-      mxy_first.NdfX() = mxy[ista].NdfX();
-      mxy_first.NdfY() = mxy[ista].NdfY();
-    }
-    else if (ih == nHitsTrack - 1) {
-      z_end           = z[ista];
-      x_last          = x[ista];
-      y_last          = y[ista];
-      mxy_last.X()    = mxy[ista].X();
-      mxy_last.Y()    = mxy[ista].Y();
-      mxy_last.Dx2()  = mxy[ista].Dx2();
-      mxy_last.Dy2()  = mxy[ista].Dy2();
-      mxy_last.Dxy()  = mxy[ista].Dxy();
-      mxy_last.NdfX() = mxy[ista].NdfX();
-      mxy_last.NdfY() = mxy[ista].NdfY();
-      time_last       = time[ista];
-      dt2_last        = dt2[ista];
-      wtime_last      = sta[ista]->timeInfo ? 1. : 0.;
-    }
+  {
+    const ca::Hit& l_hit = fvHits[triplet[2]];
+    const int l_ista     = l_hit.Station();
+    z_end                = z[l_ista];
+    x_last               = x[l_ista];
+    y_last               = y[l_ista];
+    time_last            = time[l_ista];
+    wtime_last           = sta[l_ista]->timeInfo ? 1. : 0.;
+    dt2_last             = dt2[l_ista];
+    mxy_last.X()         = mxy[l_ista].X();
+    mxy_last.Y()         = mxy[l_ista].Y();
+    mxy_last.Dx2()       = mxy[l_ista].Dx2();
+    mxy_last.Dy2()       = mxy[l_ista].Dy2();
+    mxy_last.Dxy()       = mxy[l_ista].Dxy();
+    mxy_last.NdfX()      = mxy[l_ista].NdfX();
+    mxy_last.NdfY()      = mxy[l_ista].NdfY();
   }
 
   for (int ih = nHitsTrack - 1; ih >= 0; ih--) {
@@ -356,18 +346,19 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
   fit.GuessTrack(z_end, x, y, z, time, By, w, w_time, nStations);
 
-  tr.Qp() = float(1. / 1.1);
+  tr.Qp() = 1. / 1.1;
+
+  // printf("Guess track: %d ", iGThread);
 
   for (int iter = 0; iter < 2; iter++) {  // 1.5 iterations
 
     fit.SetQp0(tr.Qp());
 
     // fit backward
-
     int ista = nStations - 1;
 
     time_last = w_time[ista] ? time_last : 0;
-    time_last = w_time[ista] ? dt2_last : 0;
+    dt2_last  = w_time[ista] ? dt2_last : 1.e6f;
 
     tr.ResetErrors(mxy_last.Dx2(), mxy_last.Dy2(), 0.1, 0.1, 1.0, dt2_last, 1.e-2);
     tr.C10()  = mxy_last.Dxy();
@@ -376,19 +367,19 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     tr.Time() = time_last;
     tr.Vi()   = constants::phys::SpeedOfLightInv;
     tr.InitVelocityRange(0.5);
-    tr.Ndf()     = float(-5.) + float(2.);
-    tr.NdfTime() = float(-2.) + wtime_last;
+    tr.Ndf()     = -5. + 2.;
+    tr.NdfTime() = -2. + wtime_last;
 
     fldZ1 = z[ista];
-
     fldB1 = sta[ista]->fieldSlice.GetFieldValue(tr.X(), tr.Y());
-
+    
     fldB1.Combine(fB[ista], w[ista]);
 
     fldZ2    = z[ista - 2];
     float dz = fldZ2 - fldZ1;
     fldB2    = sta[ista]->fieldSlice.GetFieldValue(tr.X() + tr.Tx() * dz, tr.Y() + tr.Ty() * dz);
     fldB2.Combine(fB[ista - 2], w[ista - 2]);
+
     fld.Set(fldB2, fldZ2, fldB1, fldZ1, fldB0, fldZ0);
 
     for (--ista; ista >= 0; ista--) {
@@ -402,20 +393,19 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
       bool initialised = (z[ista] < z_end) & (z_start <= z[ista]);
 
+      printf("intialised: %d , z[ista]: %f , z_start: %f , z_end: %f", initialised, z[ista], z_start, z_end);
+
       fld1 = fld;
 
       fit.SetMask(initialised);
-      fit.Extrapolate(z[ista], fld1);
-      int bin       = fMaterialMap[ista].GetBin(tr.X(), tr.Y());
-      auto radThick = fMaterialMapTables[bin];
-      // auto radThick = fSetup.GetMaterial(ista).GetThicknessX0(tr.X(), tr.Y());
+      // fit.Extrapolate(z[ista], fld1);
+      printf("Extrapolate: %d ", iGThread);
+      auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
       fit.MultipleScattering(radThick);
       fit.EnergyLossCorrection(radThick, kf::FitDirection::kUpstream);
-
       fit.SetMask(initialised && w[ista]);
       fit.FilterXY(mxy[ista]);
       fit.FilterTime(time[ista], dt2[ista], sta[ista]->timeInfo);
-
 
       fldB2 = fldB1;
       fldZ2 = fldZ1;
@@ -481,23 +471,19 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     ista = 0;
 
     tr.ResetErrors(mxy_first.Dx2(), mxy_first.Dy2(), 0.1, 0.1, 1., dt2_first, 1.e-2);
-    tr.C10() = mxy_first.Dxy();
-
+    tr.C10()  = mxy_first.Dxy();
     tr.X()    = mxy_first.X();
     tr.Y()    = mxy_first.Y();
     tr.Time() = time_first;
     tr.Vi()   = constants::phys::SpeedOfLightInv;
     tr.InitVelocityRange(0.5);
-
-    tr.Ndf()     = float(-5. + 2.);
-    tr.NdfTime() = float(-2.) + wtime_first;
-
+    tr.Ndf()     = -5. + 2.;
+    tr.NdfTime() = -2. + wtime_first;
     fit.SetQp0(tr.Qp());
 
     fldZ1 = z[ista];
     fldB1 = sta[ista]->fieldSlice.GetFieldValue(tr.X(), tr.Y());
     fldB1.Combine(fB[ista], w[ista]);
-
 
     fldZ2 = z[ista + 2];
     dz    = fldZ2 - fldZ1;
@@ -517,9 +503,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
       fit.SetMask(initialised);
       fit.Extrapolate(z[ista], fld);
-      int bin       = fMaterialMap[ista].GetBin(tr.X(), tr.Y());
-      auto radThick = fMaterialMapTables[bin];
-      // auto radThick = fSetup.GetMaterial(ista).GetThicknessX0(tr.X(), tr.Y());
+      auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
       fit.MultipleScattering(radThick);
       fit.EnergyLossCorrection(radThick, kf::FitDirection::kDownstream);
       fit.SetMask(initialised && w[ista]);
@@ -533,6 +517,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     }
   }  // iter 1.5
 
+  printf("Track fitted: %d ", iGThread);
+
   /// if track chi2 per dof is larger than threshold. Also kill negative and non-finite values
   /// if track p low than threshold_qp, then kill the track
   /// then remove triplet from list
@@ -540,7 +526,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   bool killTrack = !xpu::isfinite(chi2) || (chi2 < 0) || (chi2 > threshold_chi2);
 
   // momentum cut to reduce ghosts
-  if (abs(fit.Tr().Qp()) > threshold_qp) {
+  if (xpu::abs(fit.Tr().Qp()) > threshold_qp) {
     killTrack = true;
   }
 
@@ -561,7 +547,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     // selectedTripletIndexes[iGThread] = true;
     // selectedTripletParams[iGThread]  = tripletParams;
   }
-}
+}  // FitTripletsOT
 
 
 // XPU_D void GnnGpuGraphConstructor::FitTripletsOT2(FitTripletsOT2::context& ctx) const

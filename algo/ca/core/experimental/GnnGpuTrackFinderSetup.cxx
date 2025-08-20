@@ -193,7 +193,9 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     LOG(info) << "Running GPU tracking chain on device " << prop.name() << ", fIteration: " << fIteration;
   }
 
-  bool isCpu  = xpu::device::active().backend() == xpu::cpu;
+  bool isCpu            = xpu::device::active().backend() == xpu::cpu;
+  float embedHitsBlocks = std::ceil(frWData.Hits().size() / GnnGpuConstants::kEmbedHitsBlockSize);
+  float fitTripletsBlocks = std::ceil((frWData.Hits().size() * 400) / GnnGpuConstants::kEmbedHitsBlockSize);
 
   fGraphConstructor.fIteration = fIteration;
 
@@ -205,7 +207,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("EmbedHits_time");
   }
 
-  fQueue.launch<EmbedHits>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<EmbedHits>(xpu::n_blocks(embedHitsBlocks));
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                       = xpu::pop_timer();
@@ -214,7 +216,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("NearestNeighbours_time");
   }
 
-  fQueue.launch<NearestNeighbours>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<NearestNeighbours>(xpu::n_blocks(embedHitsBlocks));
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                               = xpu::pop_timer();
@@ -223,7 +225,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("MakeTripletsOT_time");
   }
 
-  fQueue.launch<MakeTripletsOT>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<MakeTripletsOT>(xpu::n_blocks(embedHitsBlocks));
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                            = xpu::pop_timer();
@@ -232,7 +234,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("FitTripletsOT_time");
   }
 
-  fQueue.launch<FitTripletsOT>(xpu::n_blocks(GnnGpuConstants::kEmbedHitsBlockSize));
+  fQueue.launch<FitTripletsOT>(xpu::n_blocks(1)); // fitTripletBlocks
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
@@ -427,4 +429,5 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
 
   // Initialize triplet fit params
   fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fTripletsSelected.reset(frWData.Hits().size(), xpu::buf_io);
 }

@@ -60,7 +60,7 @@ namespace cbm::algo::kf
     {
     }
 
-    GpuTrackKalmanFilter(const kf::TrackParam<DataT>& t) { SetTrack(t); }
+    XPU_D GpuTrackKalmanFilter(const kf::TrackParam<DataT>& t) { SetTrack(t); }
 
     GpuTrackKalmanFilter(const DataTmask& m, bool fitV) : fMask(m), fDoFitVelocity(fitV) {}
 
@@ -73,9 +73,15 @@ namespace cbm::algo::kf
     XPU_D void SetMask(const DataTmask& m) { fMask = m; }
 
     template<typename T>
-    XPU_D void SetTrack(const kf::TrackParam<T>& t)
+    void SetTrack(const kf::TrackParam<T>& t)
     {
-      fTr.SetOneGpu(t);
+      fTr.Set(t);
+      fQp0 = fTr.GetQp();
+    }
+
+    XPU_D void SetTrack(const kf::TrackParam<float>& t)
+    {
+      fTr = t;
       fQp0 = fTr.GetQp();
     }
 
@@ -470,7 +476,7 @@ namespace cbm::algo::kf
       //	else {
       DataT sgn = iif_mask(fTr.GetZ() < z_out, DataT(1.), DataT(-1.));
       while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {  //TODO: only for XPU
-        //	        !kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
+        // printf("z_out: %f , fTr.GetZ(): %f ", z_out, fTr.GetZ());
         DataT zNew = fTr.GetZ() + sgn * fMaxExtraplationStep;  // max. 50 cm step
         zNew       = iif_mask(sgn * (z_out - zNew) <= DataT(0.), z_out, zNew);
         ExtrapolateStep(zNew, F);
@@ -565,7 +571,7 @@ namespace cbm::algo::kf
         DataT txty  = tx * ty;
         DataT L2    = DataT(1.) + tx2 + ty2;
         DataT L2i   = DataT(1.) / L2;
-        DataT L     = sqrt(L2);
+        DataT L     = xpu::sqrt(L2);
         DataT cL    = c_light * L;
         DataT cLqp0 = cL * fQp0;
 
@@ -600,11 +606,11 @@ namespace cbm::algo::kf
           F[step][5][6] = L;
         }
         else {
-          DataT vi      = sqrt(DataT(1.) + fMass2 * fQp0 * fQp0) * kf::defs::SpeedOfLightInv<DataT>;
+          DataT vi      = xpu::sqrt(DataT(1.) + fMass2 * fQp0 * fQp0) * kf::defs::SpeedOfLightInv<DataT>;
           f[step][5]    = vi * L;
           F[step][5][2] = vi * tx / L;
           F[step][5][3] = vi * ty / L;
-          F[step][5][4] = fMass2 * fQp0 * L / sqrt(DataT(1.) + fMass2 * fQp0 * fQp0) * kf::defs::SpeedOfLightInv<DataT>;
+          F[step][5][4] = fMass2 * fQp0 * L / xpu::sqrt(DataT(1.) + fMass2 * fQp0 * fQp0) * kf::defs::SpeedOfLightInv<DataT>;
           F[step][5][5] = 0.;
           F[step][5][6] = 0.;
         }

@@ -8,6 +8,7 @@
 #pragma once  // include this header only once per compilation unit
 
 #include "CaDeviceImage.h"
+#include "CaGpuField.h"
 #include "CaGpuGrid.h"
 #include "CaGpuGridArea.h"
 #include "CaGpuMaterialMap.h"
@@ -16,9 +17,8 @@
 #include "CaMeasurementXy.h"
 #include "CaTriplet.h"
 #include "GnnGpuEmbedNet.h"
-#include "KfMeasurementU.h"
-#include "CaGpuField.h"
 #include "KfGpuTrackKalmanFilter.h"
+#include "KfMeasurementU.h"
 
 #include <xpu/device.h>
 #include <xpu/host.h>
@@ -31,7 +31,7 @@ namespace cbm::algo
     kSingletConstructorBlockSize      = 512,
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
-    kEmbedHitsBlockSize = 128,
+    kEmbedHitsBlockSize = 64,
 #endif
   };
 }  // namespace cbm::algo
@@ -163,8 +163,8 @@ namespace cbm::algo::ca
     xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
 
     // triplet fitting
-    xpu::buffer<std::array<kf::TrackParamBase<float>, kNNOrder * kNNOrder>> fvTripletParams;          ///< Triplet parameters
-
+    xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected; // 1 where triplet passed KF fit check
+    xpu::buffer<std::array<kf::TrackParamBase<float>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
   };
 
 }  // namespace cbm::algo::ca
