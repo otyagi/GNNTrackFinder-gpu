@@ -31,8 +31,8 @@ XPU_D void MakeTripletsOT::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphCon
 XPU_EXPORT(FitTripletsOT);
 XPU_D void FitTripletsOT::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT(ctx); }
 
-// XPU_EXPORT(FitTripletsOT2);
-// XPU_D void FitTripletsOT2::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT2(ctx); }
+// XPU_EXPORT(FitTripletsOT);
+// XPU_D void FitTripletsOT::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT(ctx); }
 
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
@@ -111,7 +111,9 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT(MakeTripletsOT::context& ctx) 
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= fIterationData[0].fNHits) return;
 
-  int tripletCount = 0;
+  // printf ("iGThread: %d \t", iGThread);
+
+  unsigned int tripletCount = 0;
 
   const float YZCut = 0.1;  // (radians) def - 0.1 from distributions
   const float XZCut = 0.1;  // def - 0.1 from distributions
@@ -134,7 +136,7 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT(MakeTripletsOT::context& ctx) 
   const ca::HitIndex_t iHitEndM   = fIndexFirstHitStation[iStaM + 1];  // end index
   for (int iDoubletL = 0; iDoubletL < nLHitDoublets; iDoubletL++) {
     const unsigned int iHitM = doubletsLHit[iDoubletL];
-    for (std::size_t iM = iHitStartM; iM < iHitEndM; iM++) {  // hits on next station
+    for (auto iM = iHitStartM; iM < iHitEndM; iM++) {  // hits on next station
       if (iHitM == iM) {
         const auto& hitm = fvHits[iHitM];
         const float x_m  = hitm.X();
@@ -177,19 +179,23 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const int NMaxTripletHit = kNNOrder * kNNOrder;
   if (iGThread >= fIterationData[0].fNHits * NMaxTripletHit) return;
 
-  const unsigned int iHitL         = xpu::floor(iGThread / NMaxTripletHit);
+  const int iHitL    = iGThread / NMaxTripletHit;
   const unsigned int nTripletsHitL = fNTriplets[iHitL];
-  const unsigned int iTriplet      = iGThread % NMaxTripletHit;
-  if (iTriplet >= nTripletsHitL) {
-    std::array<float, 7> tripletParams{-100., -100., -100., -100., -100., -100., -100.};
-    fTripletsSelected[iGThread][iTriplet] = false;
-    fvTripletParams[iGThread][iTriplet]   = tripletParams;
+  const int iTriplet = iGThread % NMaxTripletHit;
+  if (iHitL >= fIterationData[0].fNHits) return;
+  if (iTriplet >= NMaxTripletHit) return;
+  if (nTripletsHitL > NMaxTripletHit) return;
+  if (iTriplet >= (int) nTripletsHitL) {
+    // const std::array<float, 7> tripletParams{-100., -100., -100., -100., -100., -100., -100.};
+    // fTripletsSelected[iHitL][iTriplet] = false;
+    // fvTripletParams[iHitL][iTriplet]   = tripletParams;
     return;
   }
 
-  // printf("iGThread: %d, iHitL: %d, iTriplet: %d ", iGThread, iHitL, iTriplet);
+  const std::array<unsigned int, 3> triplet = {(unsigned int) iHitL, fTriplets[iHitL][iTriplet][0],
+                                               fTriplets[iHitL][iTriplet][1]};
 
-  const std::array<unsigned int, 3> triplet = {iHitL, fTriplets[iHitL][iTriplet][0], fTriplets[iHitL][iTriplet][1]};
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   const int nStations        = 12;
   const float threshold_chi2 = 19.5;  // def - 19.5
@@ -350,6 +356,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   }
 
   fit.GuessTrack(z_end, x, y, z, time, By, w, w_time, nStations);
+
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   tr.Qp() = 1. / 1.1;
 
@@ -527,8 +535,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   /// if track chi2 per dof is larger than threshold. Also kill negative and non-finite values
   /// if track p low than threshold_qp, then kill the track
   /// then remove triplet from list
-  float chi2     = fit.Tr().GetChiSq();
-  bool killTrack = !xpu::isfinite(chi2) || (chi2 < 0) || (chi2 > threshold_chi2);
+  const float chi2 = fit.Tr().GetChiSq();
+  bool killTrack   = !xpu::isfinite(chi2) || (chi2 < 0) || (chi2 > threshold_chi2);
 
   // momentum cut to reduce ghosts
   if (xpu::abs(fit.Tr().Qp()) > threshold_qp) {
@@ -546,10 +554,16 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const float C22 = fit.Tr().C22();
   const float Ty  = fit.Tr().Ty();
   const float C33 = fit.Tr().C33();
-  std::array<float, 7> tripletParams{chi2, qp, Cqp, Tx, C22, Ty, C33};
-  fvTripletParams[iGThread][iTriplet]   = tripletParams;
-  fTripletsSelected[iGThread][iTriplet] = !killTrack;
+  const std::array<float, 7> tripletParams{chi2, qp, Cqp, Tx, C22, Ty, C33};
+  fvTripletParams[iHitL][iTriplet]   = tripletParams;
+  fTripletsSelected[iHitL][iTriplet] = !killTrack;
 }  // FitTripletsOT
+
+
+// XPU_D void GnnGpuGraphConstructor::ConstructCandidates(ConstructCandidates::context& ctx) const {
+//   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+//   // if (iGThread >= fIterationData[0].fNHits) return;
+// }
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const
 {
