@@ -32,7 +32,10 @@ XPU_EXPORT(FitTripletsOT);
 XPU_D void FitTripletsOT::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT(ctx); }
 
 XPU_EXPORT(ConstructCandidates);
-XPU_D void ConstructCandidates::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().ConstructCandidates(ctx); }
+XPU_D void ConstructCandidates::operator()(context& ctx)
+{
+  ctx.cmem<strGnnGpuGraphConstructor>().ConstructCandidates(ctx);
+}
 
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
@@ -179,24 +182,21 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   const int NMaxTripletHit = kNNOrder * kNNOrder;
   if (iGThread >= fIterationData[0].fNHits * NMaxTripletHit) return;
 
-  const int iHitL    = iGThread / NMaxTripletHit;
+  const unsigned int iHitL = iGThread / NMaxTripletHit;
   if (iHitL >= fIterationData[0].fNHits) return;
   const int lSta = fvHits[iHitL].Station();
   if (lSta > 9) return;
   const unsigned int nTripletsHitL = fNTriplets[iHitL];
-  const int iTriplet = iGThread % NMaxTripletHit;
+  const int iTriplet               = iGThread % NMaxTripletHit;
   if (iTriplet >= NMaxTripletHit) return;
   if (nTripletsHitL > NMaxTripletHit || nTripletsHitL == 0) return;
-  if (iTriplet >= (int) nTripletsHitL) {
-    // const std::array<float, 7> tripletParams{-100., -100., -100., -100., -100., -100., -100.};
-    // fTripletsSelected[iHitL][iTriplet] = false;
-    // fvTripletParams[iHitL][iTriplet]   = tripletParams;
-    return;
+  if (iTriplet >= (int) nTripletsHitL) return;
+
+  const std::array<unsigned int, 3> triplet = {iHitL, fTriplets[iHitL][iTriplet][0], fTriplets[iHitL][iTriplet][1]};
+
+  for (int i = 0; i < 3; i++){
+    if (triplet[i] >= fIterationData[0].fNHits) return;
   }
-
-  const std::array<unsigned int, 3> triplet = {(unsigned int) iHitL, fTriplets[iHitL][iTriplet][0],
-                                               fTriplets[iHitL][iTriplet][1]};
-
   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   const int nStations        = 12;
@@ -268,17 +268,17 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     z[ista]      = ZSta[ista];
   }
 
-  //fmask isFieldPresent = fmask::Zero();
-
   const int nHitsTrack = 3;  // triplet
   int iSta[constants::size::MaxNstations];
 
-  // printf("Init hit info: %d ", iGThread);
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   for (int ih = 0; ih < nHitsTrack; ih++) {
     const ca::Hit& hit = fvHits[triplet[ih]];
     const int ista     = hit.Station();
     auto detSystemId   = sta[ista]->GetDetectorID();
+
+    // printf("ih: %d, ista: %d \n", ih, ista);
 
     iSta[ih] = ista;
     w[ista]  = true;
@@ -286,17 +286,24 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
       w_time[ista] = true;
     }
     // subtract misalignment tolerances to get the original hit errors
-    float dX2Orig = hit.dX2() - fParams[fIteration].GetMisalignmentXsq(detSystemId);
-    float dY2Orig = hit.dY2() - fParams[fIteration].GetMisalignmentYsq(detSystemId);
+    float dX2Orig = hit.dX2();//- fParams[fIteration].GetMisalignmentXsq(detSystemId);
+    float dY2Orig = hit.dY2();// - fParams[fIteration].GetMisalignmentYsq(detSystemId);
     float dXYOrig = hit.dXY();
-    if (dX2Orig < 0. || dY2Orig < 0. || fabs(dXYOrig / sqrt(dX2Orig * dY2Orig)) > 1.) {
-      dX2Orig = hit.dX2();
-      dY2Orig = hit.dY2();
-    }
-    float dT2Orig = hit.dT2() - fParams[fIteration].GetMisalignmentTsq(detSystemId);
-    if (dT2Orig < 0.) {
-      dT2Orig = hit.dT2();
-    }
+    // if (dX2Orig < 0. || dY2Orig < 0. || xpu::abs(dXYOrig / xpu::sqrt(dX2Orig * dY2Orig)) > 1.) {
+    //   dX2Orig = hit.dX2();
+    //   dY2Orig = hit.dY2();
+    // }
+    float dT2Orig = hit.dT2();// - fParams[fIteration].GetMisalignmentTsq(detSystemId);
+    // if (dT2Orig < 0.) {
+    //   dT2Orig = hit.dT2();
+    // }
+
+    // printf("ih: %d, ista: %d \n", ih, ista);
+
+    /// crashes on all
+    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentXsq(detSystemId));
+    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentYsq(detSystemId));
+    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentTsq(detSystemId));
 
     x[ista]    = hit.X();  //x_temp;
     y[ista]    = hit.Y();  //y_temp;
@@ -315,6 +322,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     mxy[ista].NdfX() = 1.;
     mxy[ista].NdfY() = 1.;
   }  // ih
+
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   {
     const ca::Hit& f_hit = fvHits[triplet[0]];
@@ -357,9 +366,11 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     By[ista]       = sta[ista]->fieldSlice.GetFieldValue(0., 0.).y;
   }
 
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
+
   fit.GuessTrack(z_end, x, y, z, time, By, w, w_time, nStations);
 
-  printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   tr.Qp() = 1. / 1.1;
 
@@ -530,7 +541,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
     }
   }  // iter 1.5
 
-  printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
+  // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
   /// if track chi2 per dof is larger than threshold. Also kill negative and non-finite values
   /// if track p low than threshold_qp, then kill the track
@@ -560,7 +571,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 }  // FitTripletsOT
 
 
-XPU_D void GnnGpuGraphConstructor::ConstructCandidates(ConstructCandidates::context& ctx) const {
+XPU_D void GnnGpuGraphConstructor::ConstructCandidates(ConstructCandidates::context& ctx) const
+{
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   // if (iGThread >= fIterationData[0].fNHits) return;
 }

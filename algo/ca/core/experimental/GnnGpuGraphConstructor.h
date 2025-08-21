@@ -67,7 +67,7 @@ namespace cbm::algo::ca
   };
 
   struct FitTripletsOT : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<1>;
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
     XPU_D void operator()(context& ctx);

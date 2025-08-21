@@ -234,7 +234,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("FitTripletsOT_time");
   }
 
-  fQueue.launch<FitTripletsOT>(xpu::n_blocks(1));  // fitTripletBlocks
+  fQueue.launch<FitTripletsOT>(xpu::n_blocks(fitTripletsBlocks));  // fitTripletBlocks
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
@@ -337,7 +337,8 @@ void GnnGpuTrackFinderSetup::SaveFittedTripletsAsTracks()
   int nTriplets    = 0;
   for (std::size_t iHitL = 0; iHitL < nHits; iHitL++) {
     const auto& hitL = fGraphConstructor.fvHits[iHitL];
-    if (fGraphConstructor.fNNeighbours[iHitL] == 0 || hitL.Station() > 9) continue;
+    if (fGraphConstructor.fNNeighbours[iHitL] == 0 || hitL.Station() > 9 || fGraphConstructor.fNTriplets[iHitL] == 0)
+      continue;
     const auto& tripletsHitL = fGraphConstructor.fTriplets[iHitL];
     // LOG(info) << "iHitL: " << iHitL << ", Neighbours: " <<fGraphConstructor.fNNeighbours[iHitL];
     for (unsigned int iTriplet = 0; iTriplet < fGraphConstructor.fNTriplets[iHitL]; iTriplet++) {
