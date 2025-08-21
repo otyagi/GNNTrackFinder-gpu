@@ -193,8 +193,8 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     LOG(info) << "Running GPU tracking chain on device " << prop.name() << ", fIteration: " << fIteration;
   }
 
-  bool isCpu            = xpu::device::active().backend() == xpu::cpu;
-  float embedHitsBlocks = std::ceil((float)frWData.Hits().size() / GnnGpuConstants::kEmbedHitsBlockSize);
+  bool isCpu              = xpu::device::active().backend() == xpu::cpu;
+  float embedHitsBlocks   = std::ceil((float) frWData.Hits().size() / GnnGpuConstants::kEmbedHitsBlockSize);
   float fitTripletsBlocks = std::ceil((frWData.Hits().size() * 400.f) / GnnGpuConstants::kEmbedHitsBlockSize);
 
   fGraphConstructor.fIteration = fIteration;
@@ -234,7 +234,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     xpu::push_timer("FitTripletsOT_time");
   }
 
-  fQueue.launch<FitTripletsOT>(xpu::n_blocks(fitTripletsBlocks)); // fitTripletBlocks
+  fQueue.launch<FitTripletsOT>(xpu::n_blocks(1));  // fitTripletBlocks
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
@@ -263,6 +263,10 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   // save triplets as tracks
   fQueue.copy(fGraphConstructor.fTriplets, xpu::d2h);
   fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
+
+  // save fitted triplets
+  fQueue.copy(fGraphConstructor.fTripletsSelected, xpu::d2h);
+  fQueue.copy(fGraphConstructor.fvTripletParams, xpu::d2h);
 }
 
 void GnnGpuTrackFinderSetup::SaveDoubletsAsTracks()
@@ -321,6 +325,39 @@ void GnnGpuTrackFinderSetup::SaveTripletsAsTracks()
     }
   }
   LOG(info) << "Num triplets as tracks: " << nTriplets;
+}
+
+void GnnGpuTrackFinderSetup::SaveFittedTripletsAsTracks()
+{
+  // use doublets and NNeighbours to copy.
+  frWData.RecoHitIndices().reserve(200000);
+  frWData.RecoTracks().reserve(100000);
+
+  const auto nHits = frWData.Hits().size();
+  int nTriplets    = 0;
+  for (std::size_t iHitL = 0; iHitL < nHits; iHitL++) {
+    const auto& hitL = fGraphConstructor.fvHits[iHitL];
+    if (fGraphConstructor.fNNeighbours[iHitL] == 0 || hitL.Station() > 9) continue;
+    const auto& tripletsHitL = fGraphConstructor.fTriplets[iHitL];
+    // LOG(info) << "iHitL: " << iHitL << ", Neighbours: " <<fGraphConstructor.fNNeighbours[iHitL];
+    for (unsigned int iTriplet = 0; iTriplet < fGraphConstructor.fNTriplets[iHitL]; iTriplet++) {
+      const bool isSelected = fGraphConstructor.fTripletsSelected[iHitL][iTriplet];
+      if (!isSelected) continue;
+      const auto& tripletsIndexes = tripletsHitL[iTriplet];
+      const auto& hitM            = fGraphConstructor.fvHits[tripletsIndexes[0]];
+      const auto& hitR            = fGraphConstructor.fvHits[tripletsIndexes[1]];
+      // LOG(info) << "iHitM: " << iHitM << " ID: " << hitM.Id();
+      // LOG(info) << "iHitR: " << iHitR << " ID: " << hitR.Id();
+      frWData.RecoHitIndices().push_back(hitL.Id());
+      frWData.RecoHitIndices().push_back(hitM.Id());
+      frWData.RecoHitIndices().push_back(hitR.Id());
+      Track t;
+      t.fNofHits = 3;
+      frWData.RecoTracks().push_back(t);
+      nTriplets++;
+    }
+  }
+  LOG(info) << "Num triplets as tracks (after fitting): " << nTriplets;
 }
 
 void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)

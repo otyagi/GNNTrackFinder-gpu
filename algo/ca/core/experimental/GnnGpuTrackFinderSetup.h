@@ -9,14 +9,13 @@
 
 #include "CaGpuParameters.h"
 #include "CaGpuTimeMonitor.h"
-#include "GnnGpuGraphConstructor.h"
-#include "EmbedNet.h"
-#include "MLPutil.h"
-
 #include "CaHit.h"
 #include "CaVector.h"
 #include "CaWindowData.h"
+#include "EmbedNet.h"
+#include "GnnGpuGraphConstructor.h"
 #include "KfTrackParam.h"
+#include "MLPutil.h"
 
 #include <xpu/host.h>
 
@@ -71,22 +70,25 @@ namespace cbm::algo::ca
     /// Save doublets as tracks for debugging
     void SaveDoubletsAsTracks();
 
-    /// Save triplets as tracks for debugging
+    /// Save triplets as tracks for debugging before fitting
     void SaveTripletsAsTracks();
 
+    /// Save triplets as tracks for debugging after KF fitting
+    void SaveFittedTripletsAsTracks();
+
     /// Get the number of triplets
-    unsigned int GetNofTriplets() const { return fNTriplets; } 
+    unsigned int GetNofTriplets() const { return fNTriplets; }
 
     /// Get timings
     XpuTimings& GetTimings() { return fEventTimeMonitor; }
 
    private:
-    const Parameters<fvec>& fParameters;  ///< Object of Framework parameters class
-    WindowData& frWData;                  ///< Reference to the window data
-    xpu::queue fQueue;                    ///< GPU queue TODO: initialization is ~220 ms. Why and how to avoid?
+    const Parameters<fvec>& fParameters;           ///< Object of Framework parameters class
+    WindowData& frWData;                           ///< Reference to the window data
+    xpu::queue fQueue;                             ///< GPU queue TODO: initialization is ~220 ms. Why and how to avoid?
     ca::GnnGpuGraphConstructor fGraphConstructor;  ///< GPU graph constructor
-    unsigned int fIteration;                        ///< Iteration number
-    int fNHits;                                     ///< Number of hits
+    unsigned int fIteration;                       ///< Iteration number
+    int fNHits;                                    ///< Number of hits
 
     int fNTriplets;  ///< Number of triplets
 

@@ -999,7 +999,8 @@ namespace cbm::algo::ca
 
     // Debugging
     // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks();
-    GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
+    // GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
+    GnnGpuTrackFinderSetup.SaveFittedTripletsAsTracks();
   }
 
   // -------------------------------------------------------------------------------------------------------------------

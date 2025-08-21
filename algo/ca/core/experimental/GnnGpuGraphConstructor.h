@@ -67,18 +67,18 @@ namespace cbm::algo::ca
   };
 
   struct FitTripletsOT : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using block_size = xpu::block_size<1>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
     XPU_D void operator()(context& ctx);
   };
 
-  // struct FitTripletsOT2 : xpu::kernel<GPUReco> {
-  //   using block_size = xpu::block_size<kEmbedHitsBlockSize>;
-  //   using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
-  //   using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
-  //   XPU_D void operator()(context& ctx);
-  // };
+  struct ConstructCandidates : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx);
+  };
 
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
@@ -100,8 +100,7 @@ namespace cbm::algo::ca
 
     XPU_D void FitTripletsOT(FitTripletsOT::context&) const;
 
-    // XPU_D void FitTripletsOT2(FitTripletsOT2::context&) const;
-
+    XPU_D void ConstructCandidates(ConstructCandidates::context&) const;
 
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
@@ -165,6 +164,8 @@ namespace cbm::algo::ca
     // triplet fitting
     xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected; // 1 where triplet passed KF fit check
     xpu::buffer<std::array<std::array<float, 7>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
+  
+    // Candidates
   };
 
 }  // namespace cbm::algo::ca

@@ -476,7 +476,7 @@ namespace cbm::algo::kf
       //	else {
       DataT sgn = iif_mask(fTr.GetZ() < z_out, DataT(1.), DataT(-1.));
       // while (xpu::abs(z_out - fTr.GetZ()) > 1.e-6f) {  //TODO: only for XPU
-      while (iif_mask(fMask, xpu::abs(z_out - fTr.GetZ()), 0.f) > 1.e-6f){
+      while (iif_mask(fMask, xpu::abs(z_out - fTr.GetZ()), 0.f) > 1.e-6f) {
         //!kf::utils::isFull(kf::utils::iif(fMask, kf::utils::fabs(z_out - fTr.GetZ()), DataT(0.)) <= DataT(1.e-6))) {
         DataT zNew = fTr.GetZ() + sgn * fMaxExtraplationStep;  // max. 50 cm step
         zNew       = iif_mask(sgn * (z_out - zNew) <= DataT(0.), z_out, zNew);
@@ -666,12 +666,9 @@ namespace cbm::algo::kf
       fTr.Qp()   = r[4];
       fTr.Time() = r[5];
       fTr.Vi()   = r[6];
-
-      //fTr.Vi()( fTr.Vi() < DataT(TrackParamV::kClightNsInv) ) = DataT(TrackParamV::kClightNsInv);
       fTr.Z() = zMasked;
 
       //          covariance matrix transport
-
       DataT C[7][7];
       for (int i = 0; i < 7; i++) {
         for (int j = 0; j < 7; j++) {
