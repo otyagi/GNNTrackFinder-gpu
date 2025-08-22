@@ -37,7 +37,9 @@ namespace cbm::algo::ca
     xpu::timings EmbedHits_time[4];
     xpu::timings NearestNeighbours_time[4];
     xpu::timings MakeTripletsOT_time[4];
+    xpu::timings CompressTripletsOT_time[4];
     xpu::timings FitTripletsOT_time[4];
+    xpu::timings ConstructCandidates_time[4];
 
     int nIterations;
 
@@ -70,7 +72,9 @@ namespace cbm::algo::ca
       print_timing("EmbedHits_time", EmbedHits_time[iteration]);
       print_timing("NearestNeighbours_time", NearestNeighbours_time[iteration]);
       print_timing("MakeTripletsOT_time", MakeTripletsOT_time[iteration]);
+      print_timing("CompressTripletsOT_time", CompressTripletsOT_time[iteration]);
       print_timing("FitTripletsOT_time", FitTripletsOT_time[iteration]);
+      print_timing("ConstructCandidates_time", ConstructCandidates_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
     }
   };

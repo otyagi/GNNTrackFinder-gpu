@@ -76,6 +76,8 @@ namespace cbm::algo::ca
     /// Save triplets as tracks for debugging after KF fitting
     void SaveFittedTripletsAsTracks();
 
+    void FindTracksCpu(const bool doCompetition);
+
     /// Get the number of triplets
     unsigned int GetNofTriplets() const { return fNTriplets; }
 

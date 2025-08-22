@@ -32,6 +32,8 @@ namespace cbm::algo
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
     kEmbedHitsBlockSize = 64,
+    kScanBlockSize = 1024,
+    kCompressionBlockSize = 64,
 #endif
   };
 }  // namespace cbm::algo
@@ -80,6 +82,39 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
+  struct ExclusiveScan : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kScanBlockSize>;
+    using scan_t = xpu::block_scan<int, kScanBlockSize>;
+    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
+    using shared_memory = scan_t::storage_t;
+    using context = xpu::kernel_context<shared_memory, constants>;
+    XPU_D void operator()(context&);
+  };
+
+  struct AddBlockSums : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kScanBlockSize>;
+    using scan_t = xpu::block_scan<int, kScanBlockSize>;
+    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
+    using shared_memory = scan_t::storage_t;
+    using context = xpu::kernel_context<shared_memory, constants>;
+    XPU_D void operator()(context&, int);
+  };
+
+  struct AddOffsets : xpu::kernel<GPUReco> {
+    using block_size    = xpu::block_size<kScanBlockSize>;
+    using constants     = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context       = xpu::kernel_context<shared_memory, constants>;
+    XPU_D void operator()(context&);
+  };
+
+  struct CompressAllTripletsOrdered : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kCompressionBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<shared_memory, constants>;
+    XPU_D void operator()(context&);
+  };
+
+
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
     int fIteration;          ///< Iteration number
@@ -101,6 +136,15 @@ namespace cbm::algo::ca
     XPU_D void FitTripletsOT(FitTripletsOT::context&) const;
 
     XPU_D void ConstructCandidates(ConstructCandidates::context&) const;
+
+    XPU_D void ExclusiveScan(ExclusiveScan::context&) const;
+
+    XPU_D void AddBlockSums(AddBlockSums::context&, int nblocks) const;
+
+    XPU_D void AddOffsets(AddOffsets::context&) const;
+
+    XPU_D void CompressAllTripletsOrdered(CompressAllTripletsOrdered::context&) const;
+
 
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
@@ -161,11 +205,19 @@ namespace cbm::algo::ca
       fTriplets;                           // Triplets from hit. Can be max kNNOrder**2. Hit index in fvHits
     xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
 
+    /// flatten triplets
+    // Scan buffers
+    xpu::buffer<unsigned int> fOffsets;           // size: fIterationData[0].fNHits
+    xpu::buffer<unsigned int> fBlockOffsets;      // size: numBlocks used by scan
+    xpu::buffer<unsigned int> fBlockOffsetsLast;  // size: ceil(numBlocks / kScanBlockSize)
+
+    // Output
+    xpu::buffer<std::array<unsigned int, 2>> fTripletsFlat;  // size: total (or maximal) capacity
+    xpu::buffer<unsigned int> fTotalTriplets;                // size: 1 (optional)
+
     // triplet fitting
-    xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected; // 1 where triplet passed KF fit check
+    xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected;  // true where triplet passed KF fit check
     xpu::buffer<std::array<std::array<float, 7>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
-  
-    // Candidates
   };
 
 }  // namespace cbm::algo::ca

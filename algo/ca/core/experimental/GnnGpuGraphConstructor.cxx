@@ -37,6 +37,24 @@ XPU_D void ConstructCandidates::operator()(context& ctx)
   ctx.cmem<strGnnGpuGraphConstructor>().ConstructCandidates(ctx);
 }
 
+XPU_EXPORT(ExclusiveScan);
+XPU_D void ExclusiveScan::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().ExclusiveScan(ctx); }
+
+XPU_EXPORT(AddBlockSums);
+XPU_D void AddBlockSums::operator()(context& ctx, int nBlocks)
+{
+  ctx.cmem<strGnnGpuGraphConstructor>().AddBlockSums(ctx, nBlocks);
+}
+
+XPU_EXPORT(AddOffsets);
+XPU_D void AddOffsets::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().AddOffsets(ctx); }
+
+XPU_EXPORT(CompressAllTripletsOrdered);
+XPU_D void CompressAllTripletsOrdered::operator()(context& ctx)
+{
+  ctx.cmem<strGnnGpuGraphConstructor>().CompressAllTripletsOrdered(ctx);
+}
+
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
@@ -194,7 +212,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
 
   const std::array<unsigned int, 3> triplet = {iHitL, fTriplets[iHitL][iTriplet][0], fTriplets[iHitL][iTriplet][1]};
 
-  for (int i = 0; i < 3; i++){
+  for (int i = 0; i < 3; i++) {
     if (triplet[i] >= fIterationData[0].fNHits) return;
   }
   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
@@ -286,14 +304,14 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
       w_time[ista] = true;
     }
     // subtract misalignment tolerances to get the original hit errors
-    float dX2Orig = hit.dX2();//- fParams[fIteration].GetMisalignmentXsq(detSystemId);
-    float dY2Orig = hit.dY2();// - fParams[fIteration].GetMisalignmentYsq(detSystemId);
+    float dX2Orig = hit.dX2();  //- fParams[fIteration].GetMisalignmentXsq(detSystemId);
+    float dY2Orig = hit.dY2();  // - fParams[fIteration].GetMisalignmentYsq(detSystemId);
     float dXYOrig = hit.dXY();
     // if (dX2Orig < 0. || dY2Orig < 0. || xpu::abs(dXYOrig / xpu::sqrt(dX2Orig * dY2Orig)) > 1.) {
     //   dX2Orig = hit.dX2();
     //   dY2Orig = hit.dY2();
     // }
-    float dT2Orig = hit.dT2();// - fParams[fIteration].GetMisalignmentTsq(detSystemId);
+    float dT2Orig = hit.dT2();  // - fParams[fIteration].GetMisalignmentTsq(detSystemId);
     // if (dT2Orig < 0.) {
     //   dT2Orig = hit.dT2();
     // }
@@ -570,11 +588,9 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT(FitTripletsOT::context& ctx) co
   fTripletsSelected[iHitL][iTriplet] = !killTrack;
 }  // FitTripletsOT
 
-
 XPU_D void GnnGpuGraphConstructor::ConstructCandidates(ConstructCandidates::context& ctx) const
 {
-  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  // if (iGThread >= fIterationData[0].fNHits) return;
+  // pass
 }
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const
@@ -627,5 +643,99 @@ XPU_D void GnnGpuGraphConstructor::applyTanH(std::array<float, N>& vec) const
       float twoexp = xpu::exp(2.0f * v);
       v            = (twoexp - 1.0f) / (twoexp + 1.0f);
     }
+  }
+}
+
+// 1) Scan counts per hit -> fOffsets + per-block sums in fBlockOffsets
+XPU_D void GnnGpuGraphConstructor::ExclusiveScan(ExclusiveScan::context& ctx) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+
+  const int nHits = fIterationData[0].fNHits;
+  if (iGThread >= nHits) return;
+
+  const int tIdx = ctx.thread_idx_x();
+  const int bIdx = ctx.block_idx_x();
+
+  ExclusiveScan::scan_t scan{ctx.pos(), ctx.smem()};
+
+  // input = count of valid triplets for this hit
+  int input  = fNTriplets[iGThread];
+  int result = 0;
+
+  // exclusive prefix sum within the block
+  scan.exclusive_sum(input, result);
+
+  xpu::barrier(ctx.pos());
+
+  // write per-thread partial (block-local) result
+  fOffsets[iGThread] = result;
+
+  if (bIdx == 0)
+    printf("iGThread: %d , result: %d , fNTriplets: %d \n", iGThread, fOffsets[iGThread], fNTriplets[iGThread]);
+
+  // the last thread in the block publishes the block sum
+  if (tIdx == kScanBlockSize - 1 || iGThread == nHits - 1) {
+    // block sum = last exclusive + its own input
+    fBlockOffsets[bIdx] = result + input;
+  }
+}
+
+// 2) Scan the block sums -> fBlockOffsets now holds global block offsets
+XPU_D void GnnGpuGraphConstructor::AddBlockSums(AddBlockSums::context& ctx, int nBlocks) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+  if (iGThread >= nBlocks) return;
+
+  const int tIdx = ctx.thread_idx_x();
+  const int bIdx = ctx.block_idx_x();
+
+  AddBlockSums::scan_t scan{ctx.pos(), ctx.smem()};
+
+  int input  = fBlockOffsets[iGThread];
+  int result = 0;
+
+  scan.exclusive_sum(input, result);
+
+  xpu::barrier(ctx.pos());
+
+  // overwrite with global block offset (start of this block in the full scan)
+  fBlockOffsets[iGThread] = result;
+
+  // keep last value per (meta)block range, mirroring your colleague’s pattern
+  if (tIdx == kScanBlockSize - 1 || iGThread == nBlocks - 1) {
+    fBlockOffsetsLast[bIdx] = input;  // last block’s sum (inclusive) inside this AddBlockSums launch block
+  }
+}
+
+// 3) Add the global block offsets to each element to finalize the scan
+XPU_D void GnnGpuGraphConstructor::AddOffsets(AddOffsets::context& ctx) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+
+  const int nHits = fIterationData[0].fNHits;
+  if (iGThread >= nHits) return;
+
+  const int bIdx = ctx.block_idx_x();
+
+  // Add this block's global offset
+  fOffsets[iGThread] += fBlockOffsets[bIdx];
+}
+
+// 4) Scatter into flat output
+XPU_D void GnnGpuGraphConstructor::CompressAllTripletsOrdered(CompressAllTripletsOrdered::context& ctx) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+
+  const int nHits = fIterationData[0].fNHits;
+  if (iGThread >= nHits) return;
+
+  const unsigned int count  = fNTriplets[iGThread];
+  const unsigned int offset = fOffsets[iGThread];
+
+  // Copy the valid, already-locally-ordered entries
+  // Triplet element type: std::array<unsigned int, 2>
+  for (unsigned int j = 0; j < count; ++j) {
+    fTripletsFlat[offset + j] = fTriplets[iGThread][j];
   }
 }

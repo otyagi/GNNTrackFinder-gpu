@@ -209,6 +209,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
 
   fQueue.launch<EmbedHits>(xpu::n_blocks(embedHitsBlocks));
 
+  LOG(info) << "Num hits in event: " << frWData.Hits().size();
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                       = xpu::pop_timer();
     fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
@@ -218,6 +219,10 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
 
   fQueue.launch<NearestNeighbours>(xpu::n_blocks(embedHitsBlocks));
 
+  fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
+  xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
+  const int nDoublets = std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
+  LOG(info) << "GPU Tracking: Num doublets found: " << nDoublets;
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                               = xpu::pop_timer();
     fEventTimeMonitor.NearestNeighbours_time[fIteration] = step_time;
@@ -227,20 +232,66 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
 
   fQueue.launch<MakeTripletsOT>(xpu::n_blocks(embedHitsBlocks));
 
+  fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
+  xpu::h_view vfNTriplets(fGraphConstructor.fNTriplets);
+  const int nTriplets = std::accumulate(vfNTriplets.begin(), vfNTriplets.end(), 0);
+  LOG(info) << "GPU Tracking: Num Triplets constructed: " << nTriplets;
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                            = xpu::pop_timer();
     fEventTimeMonitor.MakeTripletsOT_time[fIteration] = step_time;
     LOG(info) << "MakeTripletsOT_time: " << step_time.wall();
+    xpu::push_timer("CompressTripletsOT_time");
+  }
+
+  // fGraphConstructor.fTripletsFlat.reset(nTriplets, xpu::buf_io);  // exact size
+  // const int NBlocks = std::ceil((float)nTriplets / GnnGpuConstants::kScanBlockSize);
+  // fQueue.launch<ExclusiveScan>(xpu::n_blocks(NBlocks));
+  // LOG(info) << "Exclusive Scan.";
+  // const int NBlockGroups = std::ceil((float)frWData.Hits().size() / GnnGpuConstants::kScanBlockSize);
+  // fQueue.launch<AddBlockSums>(xpu::n_blocks(fitTripletsBlocks), NBlockGroups);
+  // LOG(info) << "AddBlockSums";
+  // fQueue.launch<AddOffsets>(xpu::n_blocks(fitTripletsBlocks));
+  // LOG(info) << "AddOffsets";
+  // fQueue.launch<CompressAllTripletsOrdered>(xpu::n_blocks(fitTripletsBlocks));
+
+  // fQueue.copy(fGraphConstructor.fTripletsFlat, xpu::d2h);
+  // xpu::h_view vfTripletsFlat(fGraphConstructor.fTripletsFlat);
+  // const auto nTripletsFlat = vfTripletsFlat.size();
+  // LOG(info) << "GPU Tracking: Triplets Compressed: " << nTripletsFlat;
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                              = xpu::pop_timer();
+    fEventTimeMonitor.CompressTriplets_time[fIteration] = step_time;
+    LOG(info) << "CompressTripletsOT_time: " << step_time.wall();
     xpu::push_timer("FitTripletsOT_time");
   }
 
   fQueue.launch<FitTripletsOT>(xpu::n_blocks(fitTripletsBlocks));  // fitTripletBlocks
 
+  fQueue.copy(fGraphConstructor.fTripletsSelected, xpu::d2h);
+  xpu::h_view vfNTripletsSelected(fGraphConstructor.fTripletsSelected);
+  size_t nTripletsSelected = 0;
+  for (auto iHit = 0; iHit < vfNTripletsSelected.size(); iHit++) {
+    const auto& tripsHit = vfNTripletsSelected[iHit];
+    const int nTripHit   = vfNTriplets[iHit];  // uninitialized after nTripHit
+    for (auto iTrip = 0; iTrip < nTripHit; iTrip++) {
+      nTripletsSelected += tripsHit[iTrip];  // implicit cast to int
+    }
+  }
+  LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
     fEventTimeMonitor.FitTripletsOT_time[fIteration] = step_time;
     LOG(info) << "FitTripletsOT_time: " << step_time.wall();
-    // xpu::push_timer("FitTriplets_time");
+    xpu::push_timer("ConstructCandidates_time");
+  }
+
+  // fQueue.launch<ConstructCandidates>(xpu::n_blocks(embedHitsBlocks));
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                                 = xpu::pop_timer();
+    fEventTimeMonitor.ConstructCandidates_time[fIteration] = step_time;
+    LOG(info) << "ConstructCandidates_time: " << step_time.wall();
+    // xpu::push_timer("ConstructCandidates_time");
   }
 
   fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
@@ -361,11 +412,289 @@ void GnnGpuTrackFinderSetup::SaveFittedTripletsAsTracks()
   LOG(info) << "Num triplets as tracks (after fitting): " << nTriplets;
 }
 
+void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
+{
+  std::vector<std::vector<unsigned int>> tracklets;
+  tracklets.reserve(10000000);
+  std::vector<float> trackletScores;
+  trackletScores.reserve(10000000);
+  std::vector<std::array<float, 7>> trackletFitParams;  // store fit params of last triplet added to tracklet
+  trackletFitParams.reserve(10000000);
+
+  const unsigned int nHits = frWData.Hits().size();
+  int nTriplets            = 0;
+  for (unsigned int iHitL = 0; iHitL < nHits; iHitL++) {
+    const auto& hitL = fGraphConstructor.fvHits[iHitL];
+    if (fGraphConstructor.fNNeighbours[iHitL] == 0 || hitL.Station() > 9 || fGraphConstructor.fNTriplets[iHitL] == 0)
+      continue;
+    const auto& tripletsHitL = fGraphConstructor.fTriplets[iHitL];
+    for (unsigned int iTriplet = 0; iTriplet < fGraphConstructor.fNTriplets[iHitL]; iTriplet++) {
+      const bool isSelected = fGraphConstructor.fTripletsSelected[iHitL][iTriplet];
+      if (!isSelected) continue;
+      const auto& tripletsIndexes = tripletsHitL[iTriplet];
+      const auto& hitM            = fGraphConstructor.fvHits[tripletsIndexes[0]];
+      const auto& hitR            = fGraphConstructor.fvHits[tripletsIndexes[1]];
+      tracklets.push_back(std::vector<unsigned int>{iHitL, tripletsIndexes[0], tripletsIndexes[1]});
+      trackletScores.push_back(0.);
+      const auto tripletParam = fGraphConstructor.fvTripletParams[iHitL][iTriplet];
+      trackletFitParams.push_back(tripletParam);
+      nTriplets++;
+    }
+  }
+  LOG(info) << "FindTracksCpu(): Num triplets used for making tracks: " << nTriplets;
+
+  /// organize triplets by station
+  const int NStations = 12;
+  std::vector<std::vector<std::vector<unsigned int>>> tripletsByStation(NStations);
+  std::vector<std::vector<float>> tripletsScore(NStations);
+  std::vector<std::vector<std::array<float, 7>>> tripletsFitParams(NStations);
+  for (int i = 0; i < nTriplets; i++) {
+    const int sta = frWData.Hit(tracklets[i][0]).Station();
+    tripletsByStation[sta].push_back(tracklets[i]);
+    tripletsScore[sta].push_back(0.);
+    tripletsFitParams[sta].push_back(trackletFitParams[i]);
+  }
+
+  constexpr float degree_to_rad = 3.14159 / 180.0;
+  double angle1YZ, angle2YZ, angleDiffYZ1, angle1XZ, angle2XZ, angleDiffXZ1;
+  double angle3YZ, angle4YZ, angleDiffYZ2, angle3XZ, angle4XZ, angleDiffXZ2;
+  double angleDiffYZ, angleDiffXZ;
+  // cuts from distribution figures for overlapping triplets
+  constexpr float YZ_cut         = 3.0f * degree_to_rad;
+  constexpr float XZ_cut_neg_min = -2.0f * degree_to_rad;
+  constexpr float XZ_cut_neg_max = 2.0f * degree_to_rad;
+  constexpr float XZ_cut_pos_min = -2.0f * degree_to_rad;
+  constexpr float XZ_cut_pos_max = 2.0f * degree_to_rad;
+
+  /// go over every tracklet and see if it can be extended with overlapping triplet
+  for (int iTracklet = 0; iTracklet < (int) tracklets.size(); ++iTracklet) {
+    const auto& tracklet = tracklets[iTracklet];
+    int length           = tracklet.size();
+    int middleSta        = frWData.Hit(tracklet[length - 2]).Station();
+    const bool isJumpTripletLast =
+      (frWData.Hit(tracklet[length - 1]).Station() - frWData.Hit(tracklet[length - 3]).Station()) == 3;
+
+    for (int iTriplet = 0; iTriplet < (int) tripletsByStation[middleSta].size(); ++iTriplet) {
+      // check overlapping triplet
+      if (tracklet[length - 2] != tripletsByStation[middleSta][iTriplet][0]) continue;
+      if (tracklet[length - 1] != tripletsByStation[middleSta][iTriplet][1]) continue;
+
+      /// check difference of angle difference between triplets in XZ and YZ
+      const auto& h1 = frWData.Hit(tracklet[length - 3]);
+      const auto& h2 = frWData.Hit(tracklet[length - 2]);
+      const auto& h3 = frWData.Hit(tracklet[length - 1]);
+      const auto& h4 = frWData.Hit(tripletsByStation[middleSta][iTriplet][2]);
+
+      // YZ angle 1
+      angle1YZ     = std::atan2(h2.Y() - h1.Y(), h2.Z() - h1.Z());
+      angle2YZ     = std::atan2(h3.Y() - h2.Y(), h3.Z() - h2.Z());
+      angleDiffYZ1 = angle1YZ - angle2YZ;
+      // XZ angle 1
+      angle1XZ     = std::atan2(h2.X() - h1.X(), h2.Z() - h1.Z());
+      angle2XZ     = std::atan2(h3.X() - h2.X(), h3.Z() - h2.Z());
+      angleDiffXZ1 = angle1XZ - angle2XZ;
+      // YZ angle 2
+      angle3YZ     = std::atan2(h3.Y() - h2.Y(), h3.Z() - h2.Z());
+      angle4YZ     = std::atan2(h4.Y() - h3.Y(), h4.Z() - h3.Z());
+      angleDiffYZ2 = angle3YZ - angle4YZ;
+      // XZ angle 2
+      angle3XZ     = std::atan2(h3.X() - h2.X(), h3.Z() - h2.Z());
+      angle4XZ     = std::atan2(h4.X() - h3.X(), h4.Z() - h3.Z());
+      angleDiffXZ2 = angle3XZ - angle4XZ;
+
+      angleDiffYZ = angleDiffYZ1 - angleDiffYZ2;
+      angleDiffXZ = angleDiffXZ1 - angleDiffXZ2;
+
+      // YZ cut
+      if (angleDiffYZ < -YZ_cut || angleDiffYZ > YZ_cut) continue;
+      // positive particles curve -ve in XZ and -ve particles curve +ve in XZ
+      if (angleDiffXZ1 < 0) {  // positive particles
+        if (angleDiffXZ < XZ_cut_pos_min || angleDiffXZ > XZ_cut_pos_max) continue;
+      }
+      else {
+        if (angleDiffXZ < XZ_cut_neg_min || angleDiffXZ > XZ_cut_neg_max) continue;
+      }
+
+      // check momentum compatibility of overlapping triplets
+      const auto& oldFitParams = trackletFitParams[iTracklet];  // [chi2, qp, Cqp, Tx, C22, Ty, C33]
+      const auto& newFitParams = tripletsFitParams[middleSta][iTriplet];
+      // check qp compatibility
+      float dqp = oldFitParams[1] - newFitParams[1];
+      float Cqp = oldFitParams[2] + newFitParams[2];
+
+      if (!std::isfinite(dqp)) continue;
+      if (!std::isfinite(Cqp)) continue;
+
+      float qpchi2Cut = 10.0f;  // def - 10.0f
+      if (dqp * dqp > qpchi2Cut * Cqp) continue;
+
+      /// new score should have component of how well the triplets match in momentum
+      float newScore = trackletScores[iTracklet] + tripletsScore[middleSta][iTriplet];
+      newScore += dqp * dqp / Cqp;  // add momentum chi2 to score
+
+      // create new tracklet with last hit of triplet added
+      std::vector<unsigned int> newTracklet = tracklet;
+      newTracklet.push_back(tripletsByStation[middleSta][iTriplet][2]);
+      tracklets.push_back(newTracklet);
+      trackletScores.push_back(newScore);
+      trackletFitParams.push_back(newFitParams);
+    }
+  }
+
+  LOG(info) << "Num tracks constructed: " << tracklets.size();
+
+  std::vector<std::pair<std::vector<unsigned int>, float>> trackAndScores;
+  const int min_length = 4;
+  // for iter 1. No fitting
+  // min length condition
+  for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {
+    if (tracklets[itracklet].size() >= min_length) {
+      trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
+    }
+  }
+  LOG(info) << "[iter 0] Num candidate tracks with length > 4 : " << trackAndScores.size();
+
+  /// remove tracks with chi2 > max_chi2. where max_chi2 is 10*(2*hits - 5) //@TODO: check this
+  float trackChi2Cut = 10.0f;  // When not fitting candidates and using q/p proxy to chi2.
+  for (int iTrack = 0; iTrack < (int) trackAndScores.size(); iTrack++) {
+    if (trackAndScores[iTrack].second > trackChi2Cut * (trackAndScores[iTrack].first.size() - 2)) {
+      trackAndScores.erase(trackAndScores.begin() + iTrack);
+      iTrack--;
+    }
+  }
+  LOG(info) << "[iter 0] Num tracks after tracks chi2 cut: " << trackAndScores.size();
+
+  if (doCompetition) {  // do track competition
+
+    /// sort tracks by length and lower scores (chi2) first
+    std::sort(trackAndScores.begin(), trackAndScores.end(),
+              [](const std::pair<std::vector<unsigned int>, float>& a, const std::pair<std::vector<unsigned int>, float>& b) {
+                if (a.first.size() == b.first.size()) {
+                  return a.second < b.second;
+                }
+                return a.first.size() > b.first.size();
+              });
+    LOG(info) << "Tracks sorted.";
+
+#define ALTRUISTIC_COMP
+#ifdef ALTRUISTIC_COMP
+    /// --- TEST ---
+    for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
+      /// check that all hits are not used
+      auto& track    = trackAndScores[iTrack].first;
+      bool remove    = false;
+      uint nUsedHits = 0;
+      std::vector<int> usedHitIDs;
+      std::vector<int> usedHitIndexesInTrack;
+      for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
+        const ca::Hit& hit = frWData.Hit(track[iHit]);
+        if (frWData.IsHitKeyUsed(hit.FrontKey()) || frWData.IsHitKeyUsed(hit.BackKey())) {
+          nUsedHits++;
+          usedHitIDs.push_back(track[iHit]);
+          usedHitIndexesInTrack.push_back(iHit);
+        }
+      }
+      if (nUsedHits == 0) {  // clean tracks
+        /// mark all hits as used
+        for (const auto& hit : track) {
+          frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+          frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+        }
+        continue;  // go next track
+      }
+      else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
+        if (track.size() - nUsedHits >= 4) {
+          // remove used hits.
+          // read usedHitIndexes in reverse order
+          std::sort(usedHitIndexesInTrack.begin(), usedHitIndexesInTrack.end(), std::greater<int>());
+          for (const auto usedHitIndex : usedHitIndexesInTrack) {
+            track.erase(track.begin() + usedHitIndex);
+          }
+          // mark remaining hits as used
+          for (const auto& hit : track) {
+            frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+            frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+          }
+          continue;  // go next track
+        }
+        else {
+          remove = true;  // remove track if begging not successful
+        }
+      }
+
+      if (remove
+          && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
+        for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
+          if (trackAndScores[iBeg].first.size() <= trackAndScores[iTrack].first.size())
+            continue;                                        // only beg from longer tracks
+          if (trackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
+          if (trackAndScores[iBeg].second < trackAndScores[iTrack].second)
+            continue;  // dont donate to higher chi2 beggar
+
+          auto& begTrack = trackAndScores[iBeg].first;
+          for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
+            const auto begHit = begTrack[iBegHit];
+            if (begHit == usedHitIDs[0]) continue;  // dont let exact hit be borrowed.
+            if (frWData.Hit(begHit).FrontKey() == frWData.Hit(usedHitIDs[0]).FrontKey()
+                || frWData.Hit(begHit).BackKey()
+                     == frWData.Hit(usedHitIDs[0]).BackKey()) {  // only one track will match
+              // remove iBegHit from begTrack
+              begTrack.erase(begTrack.begin() + iBegHit);
+              // reset hit flags. Will be reset by beggar
+              frWData.IsHitKeyUsed(frWData.Hit(begHit).FrontKey()) = 0;
+              frWData.IsHitKeyUsed(frWData.Hit(begHit).BackKey())  = 0;
+
+              remove = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (remove) {
+        trackAndScores.erase(trackAndScores.begin() + iTrack);
+        iTrack--;
+        continue;
+      }
+      /// mark all hits as used
+      for (const auto& hit : track) {
+        frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+        frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+      }
+    }
+#endif  // ALTRUISTIC_COMP
+
+  }  // track competition
+
+  // save tracks
+  frWData.RecoHitIndices().reserve(200000);
+  frWData.RecoTracks().reserve(100000);
+
+  if (trackAndScores.size() == 0) {  // no tracks found
+    return;
+  }
+  for (const auto& [track, _] : trackAndScores) {
+    for (const auto& iHit : track) {
+      const ca::Hit& hit = frWData.Hit(iHit);
+      // used strips are marked
+      frWData.IsHitKeyUsed(hit.FrontKey()) = 1;
+      frWData.IsHitKeyUsed(hit.BackKey())  = 1;
+      frWData.RecoHitIndices().push_back(hit.Id());
+    }
+    Track t;
+    t.fNofHits = track.size();
+    frWData.RecoTracks().push_back(t);
+  }
+
+  LOG(info) << "FindTracksCPU(): Num tracks competition: " << trackAndScores.size();
+}
+
 void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
 {
   const int nStations = fParameters.GetNstationsActive();
+  const int NHits     = frWData.Hits().size();
 
-  fGraphConstructor.fEmbedCoord.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fEmbedCoord.reset(NHits, xpu::buf_io);
 
   std::vector<int> EmbNetTopology_ = {3, 16, 16, 6};
   EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
@@ -436,8 +765,8 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   // LOG(info) << "Copied embedding parameters to GPU.";
 
   // Setup for doublets
-  fGraphConstructor.fDoublets.reset(frWData.Hits().size(), xpu::buf_io);
-  fGraphConstructor.fNNeighbours.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fDoublets.reset(NHits, xpu::buf_io);
+  fGraphConstructor.fNNeighbours.reset(NHits, xpu::buf_io);
 
   // Set starting index of hits for each station
   fGraphConstructor.fIndexFirstHitStation.reset(nStations + 1, xpu::buf_io);
@@ -462,10 +791,18 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   fQueue.copy(fGraphConstructor.fIndexFirstHitStation, xpu::h2d);
 
   // Set Triplets
-  fGraphConstructor.fTriplets.reset(frWData.Hits().size(), xpu::buf_io);
-  fGraphConstructor.fNTriplets.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fTriplets.reset(NHits, xpu::buf_io);
+  fGraphConstructor.fNTriplets.reset(NHits, xpu::buf_io);
+
+  /// Flatten triplets
+  // fGraphConstructor.fOffsets.reset(NHits, xpu::buf_device);
+  // const int nBlocks = std::ceil(NHits / GnnGpuConstants::kScanBlockSize);
+  // fGraphConstructor.fBlockOffsets.reset(nBlocks,
+  //                                       xpu::buf_device);  // size: numBlocks used by scan
+  // fGraphConstructor.fBlockOffsetsLast.reset(std::ceil(nBlocks / GnnGpuConstants::kScanBlockSize),
+  //                                           xpu::buf_device);  // size: ceil(numBlocks / kScanBlockSize)
 
   // Initialize triplet fit params
-  fGraphConstructor.fvTripletParams.reset(frWData.Hits().size(), xpu::buf_io);
-  fGraphConstructor.fTripletsSelected.reset(frWData.Hits().size(), xpu::buf_io);
+  fGraphConstructor.fvTripletParams.reset(NHits, xpu::buf_io);
+  fGraphConstructor.fTripletsSelected.reset(NHits, xpu::buf_io);
 }
