@@ -422,7 +422,6 @@ namespace cbm::algo::ca
     kf::FieldValue<fvec> fldB0, fldB1, fldB2 _fvecalignment;
     kf::FieldRegion<fvec> fld _fvecalignment;
 
-
     kf::FieldValue<fvec> fldB01, fldB11, fldB21 _fvecalignment;
     kf::FieldRegion<fvec> fld1 _fvecalignment;
 
@@ -517,12 +516,10 @@ namespace cbm::algo::ca
       //fmask isFieldPresent = fmask::Zero();
 
       for (int iVec = 0; iVec < nTracks_SIMD; iVec++) {
-
         int nHitsTrack = t[iVec]->fNofHits;
         int iSta[constants::size::MaxNstations];
 
         for (int ih = 0; ih < nHitsTrack; ih++) {
-
           const ca::Hit& hit           = input.GetHit(tripletHits[start_hit++]);
           const int ista               = hit.Station();
           auto [detSystemId, iStLocal] = fParameters.GetActiveSetup().GetIndexMap().GlobalToLocal<EDetectorID>(ista);
@@ -867,5 +864,7 @@ namespace cbm::algo::ca
         }
       }
     }  // itrack/triplet
+    LOG(info) << "[ITER 1] Primary count: " << primaryCount << ", All count: " << allCount;
+
   }  // FitGNNTriplets
 }  // namespace cbm::algo::ca

@@ -1001,7 +1001,7 @@ namespace cbm::algo::ca
     // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks();
     // GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
     // GnnGpuTrackFinderSetup.SaveFittedTripletsAsTracks();
-    GnnGpuTrackFinderSetup.FindTracksCpu(true); //doCompetition
+    GnnGpuTrackFinderSetup.FindTracksCpu(true);  //doCompetition
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1014,6 +1014,9 @@ namespace cbm::algo::ca
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
       case 0: graphConstructor.FindFastPrim(2); break;
+      case 1: graphConstructor.FindSlowPrimJump(2); break;
+      case 2: return;
+      // case 3: break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;
     }
 

@@ -30,6 +30,10 @@ namespace cbm::algo::ca
     /// -- FUNCTIONS
     void FindFastPrim(const int mode);
 
+    void FindSlowPrimJump(const int mode);
+
+    void FindAllSecJump(const int mode);
+
     void CreateTracksTriplets(const int mode, const int GNNIteration);
 
     void SaveAllEdgesAsTracks();
@@ -41,6 +45,8 @@ namespace cbm::algo::ca
     void PrepareFinalTracks();
 
     void CreateMetricLearningDoublets(const int iter);
+    
+    void CreateMetricLearningDoubletsJump(const int iter);
 
     /// -- VARIABLES
 

@@ -133,6 +133,382 @@ namespace cbm::algo::ca
     }
   }  // FindFastPrim
 
+
+  /// Slow primary and jump triplet
+  void GraphConstructor::FindSlowPrimJump(const int mode)
+  {
+    CreateMetricLearningDoubletsJump(1);
+
+    const float margin = 5.0f;  // def - 5
+    // fill edges
+    edges.clear();
+    int edgeIndex   = 0;
+    int nEdgesFound = 0;
+    float y1, z1, y2, z2, slope;
+    for (int istal = 0; istal < NStations - 1; istal++) {
+      std::vector<std::pair<int, int>> edgesSta;
+      edgesSta.reserve(2 * maxNeighOrderAllPrim_ * doublets[istal].size());
+      for (int iel = 0; iel < (int) doublets[istal].size(); iel++) {
+        for (int iem = 0; iem < (int) doublets[istal][iel].size(); iem++) {
+          int ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          y1        = frWData.Hit(ihitl).Y();
+          z1        = frWData.Hit(ihitl).Z() + 44.0f;
+          y2        = frWData.Hit(doublets[istal][iel][iem]).Y();
+          z2        = frWData.Hit(doublets[istal][iel][iem]).Z() + 44.0f;
+          slope     = (y2 - y1) / (z2 - z1);
+          if (std::abs(y1 - slope * z1) > margin) {
+            edgeIndex++;
+            continue;
+          }
+          else {
+            edgesSta.push_back(std::make_pair(ihitl, (int) doublets[istal][iel][iem]));
+            nEdgesFound++;
+          }
+          edgeIndex++;
+        }
+      }
+      edges.push_back(edgesSta);
+    }
+    LOG(info) << "Num true edges after removing displaced edges: " << nEdgesFound;
+
+    // saveAllEdgesAsTracks();
+    // return;
+
+    // consecutive edge difference cuts
+    const float YZCut_Cons = 0.4;  // def - 0.4 in radians from distributions
+    const float XZCut_Cons = 0.8;  // def - 0.8 in radians
+    // jump edge difference cuts
+    const float YZCut_Jump     = 0.2;   // def - 0.2
+    const float XZCut_Jump     = 0.4;   // def - 0.4
+    const float jump_margin_yz = 0.5f;  // def - 0.5
+    float y3, z3;
+
+    // create triplets with edges with shared hits and prepare for input to triplet classifier
+    constexpr unsigned int N_TRIPLETS_SEC_MAX = 500000;
+    std::vector<std::vector<int>> allTripletsIndex;  // index in fWindowHits
+    allTripletsIndex.reserve(N_TRIPLETS_SEC_MAX);
+
+    for (int istal = 0; istal < NStations - 2; istal++) {
+      if (edges[istal].size() == 0) continue;  // skip empty edges
+      for (int iel = 0; iel < (int) edges[istal].size(); iel++) {
+        const int sta1 = frWData.Hit(edges[istal][iel].first).Station();
+        const int sta2 = frWData.Hit(edges[istal][iel].second).Station();
+
+        if ((sta2 - sta1) == 1) {                      // triplet type: [1 2 3/4]. First consecutive edge
+          if (edges[istal + 1].size() == 0) continue;  // skip empty edges
+          for (int iem = 0; iem < (int) edges[istal + 1].size(); iem++) {
+            const int sta3 = frWData.Hit(edges[istal + 1][iem].second).Station();
+            if ((sta3 - sta2) == 1) {                                         // triplet types: [1 2 3]. No jump
+              if (edges[istal][iel].second == edges[istal + 1][iem].first) {  // adjacent edges form triplet
+                std::vector<int> triplet;
+                triplet.push_back(edges[istal][iel].first);
+                triplet.push_back(edges[istal][iel].second);
+                triplet.push_back(edges[istal + 1][iem].second);
+                const auto& hit1 = frWData.Hit(triplet[0]);
+                const auto& hit2 = frWData.Hit(triplet[1]);
+                const auto& hit3 = frWData.Hit(triplet[2]);
+
+                // Cuts on triplet. Limits come from distributions
+                // YZ angle difference
+                const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+                const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+                float angleDiffYZ    = angle1YZ - angle2YZ;
+                if (angleDiffYZ < -YZCut_Cons || angleDiffYZ > YZCut_Cons) continue;
+
+                // XZ slope and angle difference
+                const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+                const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+                float angleDiffXZ    = angle1XZ - angle2XZ;
+                if (angleDiffXZ < -XZCut_Cons || angleDiffXZ > XZCut_Cons) continue;
+
+                allTripletsIndex.push_back(triplet);
+              }
+            }
+            else if ((sta3 - sta2) == 2) {            // triplet type: [1 2 4]. First edge consecutive, second edge jump
+              if (sta1 >= 9 || sta2 >= 10) continue;  // skip triplet with jump edge to last station
+              if (edges[istal][iel].second == edges[istal + 1][iem].first) {  // adjacent to jump
+                std::vector<int> triplet;
+                triplet.push_back(edges[istal][iel].first);
+                triplet.push_back(edges[istal][iel].second);
+                triplet.push_back(edges[istal + 1][iem].second);
+                const auto& hit1 = frWData.Hit(triplet[0]);
+                const auto& hit2 = frWData.Hit(triplet[1]);
+                const auto& hit3 = frWData.Hit(triplet[2]);
+
+                // jump triplet must be primary
+                y1    = hit1.Y();
+                z1    = hit1.Z() + 44.0f;
+                y3    = hit3.Y();
+                z3    = hit3.Z() + 44.0f;
+                slope = (y3 - y1) / (z3 - z1);
+                if (std::abs(y1 - slope * z1) > jump_margin_yz) continue;
+
+                // Cuts on triplet internal angle
+                // YZ angle difference
+                const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+                const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+                float angleDiffYZ    = angle1YZ - angle2YZ;
+                if (angleDiffYZ < -YZCut_Jump || angleDiffYZ > YZCut_Jump) continue;
+
+                // XZ slope and angle difference
+                const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+                const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+                float angleDiffXZ    = angle1XZ - angle2XZ;
+                if (angleDiffXZ < -XZCut_Jump || angleDiffXZ > XZCut_Jump) continue;
+
+                allTripletsIndex.push_back(triplet);
+              }
+            }
+          }
+        }
+        else if ((sta2 - sta1) == 2) {            // triplet types: [1 3 4]. First edge jump, second edge consecutive
+          if (sta1 >= 9 || sta2 >= 11) continue;  // skip triplet with jump edge to last station
+          if (edges[istal + 2].size() == 0) continue;  // skip empty edges
+          for (int iem = 0; iem < (int) edges[istal + 2].size(); iem++) {
+            if (edges[istal][iel].second == edges[istal + 2][iem].first) {  // jump to adjacent edge
+              std::vector<int> triplet;
+              triplet.push_back(edges[istal][iel].first);
+              triplet.push_back(edges[istal][iel].second);
+              triplet.push_back(edges[istal + 2][iem].second);
+              const auto& hit1 = frWData.Hit(triplet[0]);
+              const auto& hit2 = frWData.Hit(triplet[1]);
+              const auto& hit3 = frWData.Hit(triplet[2]);
+
+              // jump triplet must be primary
+              y1    = hit1.Y();
+              z1    = hit1.Z() + 44.0f;
+              y3    = hit3.Y();
+              z3    = hit3.Z() + 44.0f;
+              slope = (y3 - y1) / (z3 - z1);
+              if (std::abs(y1 - slope * z1) > jump_margin_yz) continue;
+
+              // Cuts on triplet internal angle
+              // YZ angle difference
+              const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+              const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+              float angleDiffYZ    = angle1YZ - angle2YZ;
+              if (std::abs(angleDiffYZ) > YZCut_Jump) continue;
+
+              // XZ slope and angle difference
+              const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+              const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+              float angleDiffXZ    = angle1XZ - angle2XZ;
+              if (std::abs(angleDiffXZ) > XZCut_Jump) continue;
+
+              allTripletsIndex.push_back(triplet);
+            }
+          }
+        }
+      }
+    }
+    if (allTripletsIndex.size() == 0) {
+      LOG(info) << "No triplets found. Exiting.";
+      return;
+    }
+    LOG(info) << "Number of triplets created from edges: " << allTripletsIndex.size();
+
+    for (int i = 0; i < (int) allTripletsIndex.size(); i++) {
+      triplets_.push_back(allTripletsIndex[i]);
+    }
+
+    FitTriplets(1);
+
+    if (mode == 0) {
+      // saveAllTripletsAsTracks();
+    }
+    else {
+      CreateTracksTriplets(mode, 1);
+    }
+  }  // FindSlowPrimJump
+
+  /// create all secondary and jump triplets
+  void GraphConstructor::FindAllSecJump(const int mode)
+  {
+    CreateMetricLearningDoubletsJump(3);
+
+    const float outer_margin = 100.0f;  // def - 100.0f cm in YZ plane.
+    // fill edges
+    edges.clear();
+    int edgeIndex   = 0;
+    int nEdgesFound = 0;
+    float y1, z1, y2, z2, slope, abs_intercept;
+    for (int istal = 0; istal < NStations - 1; istal++) {
+      std::vector<std::pair<int, int>> edgesSta;
+      edgesSta.reserve(2 * maxNeighOrderSec_ * doublets[istal].size());
+      for (int iel = 0; iel < (int) doublets[istal].size(); iel++) {
+        for (int iem = 0; iem < (int) doublets[istal][iel].size(); iem++) {
+          int ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          y1        = frWData.Hit(ihitl).Y();
+          z1        = frWData.Hit(ihitl).Z() + 44.0f;
+          y2        = frWData.Hit(doublets[istal][iel][iem]).Y();
+          z2        = frWData.Hit(doublets[istal][iel][iem]).Z() + 44.0f;
+          slope         = (y2 - y1) / (z2 - z1);
+          abs_intercept = std::abs(y1 - slope * z1);
+          if (abs_intercept > outer_margin) {
+            edgeIndex++;
+            continue;
+          }
+          else {
+            edgesSta.push_back(std::make_pair(ihitl, (int) doublets[istal][iel][iem]));
+            nEdgesFound++;
+          }
+          edgeIndex++;
+        }
+      }
+      edges.push_back(edgesSta);
+    }
+    LOG(info) << "Num true edges after removing displaced edges: " << nEdgesFound;
+
+    // saveAllEdgesAsTracks();
+    // return;
+
+    // consecutive edge difference cuts
+    const float YZCut_Cons = 0.4;  // def - 0.4 in radians from distributions
+    const float XZCut_Cons = 0.8;  // def - 0.8 in radians
+    // jump edge difference cuts
+    const float YZCut_Jump     = 0.1;    // def - 0.1
+    const float XZCut_Jump     = 0.2;    // def - 0.2
+    const float jump_margin_yz = 10.0f;  // def -
+    float y3, z3;
+
+    // create triplets with edges with shared hits and prepare for input to triplet classifier
+    constexpr unsigned int N_TRIPLETS_SEC_MAX = 500000;
+    std::vector<std::vector<int>> allTripletsIndex;  // index in fWindowHits
+    allTripletsIndex.reserve(N_TRIPLETS_SEC_MAX);
+
+    for (int istal = 0; istal < NStations - 2; istal++) {
+      if (edges[istal].size() == 0) continue;  // skip empty edges
+      for (int iel = 0; iel < (int) edges[istal].size(); iel++) {
+        const int sta1 = frWData.Hit(edges[istal][iel].first).Station();
+        const int sta2 = frWData.Hit(edges[istal][iel].second).Station();
+
+        if ((sta2 - sta1) == 1) {                      // triplet types: [1 2 .]. First consecutive edge
+          if (edges[istal + 1].size() == 0) continue;  // skip empty edges
+          for (int iem = 0; iem < (int) edges[istal + 1].size(); iem++) {
+            const int sta3 = frWData.Hit(edges[istal + 1][iem].second).Station();
+            if ((sta3 - sta2) == 1) {                                         // triplet types: [1 2 3]. No jump
+              if (edges[istal][iel].second == edges[istal + 1][iem].first) {  // adjacent edges form triplet
+                std::vector<int> triplet;
+                triplet.push_back(edges[istal][iel].first);
+                triplet.push_back(edges[istal][iel].second);
+                triplet.push_back(edges[istal + 1][iem].second);
+                const auto& hit1 = frWData.Hit(triplet[0]);
+                const auto& hit2 = frWData.Hit(triplet[1]);
+                const auto& hit3 = frWData.Hit(triplet[2]);
+
+                // Cuts on triplet. Limits come from distributions
+                // YZ angle difference
+                const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+                const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+                float angleDiffYZ    = angle1YZ - angle2YZ;
+                if (angleDiffYZ < -YZCut_Cons || angleDiffYZ > YZCut_Cons) continue;
+
+                // XZ slope and angle difference
+                const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+                const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+                float angleDiffXZ    = angle1XZ - angle2XZ;
+                if (angleDiffXZ < -XZCut_Cons || angleDiffXZ > XZCut_Cons) continue;
+
+                allTripletsIndex.push_back(triplet);
+              }
+            }
+            else if ((sta3 - sta2) == 2) {  // triplet type: [1 2 4]. First edge consecutive, second edge jump
+              if (sta1 >= 9) continue;      // skip triplet with jump edge to last station
+              if (edges[istal][iel].second == edges[istal + 1][iem].first) {  // adjacent to jump
+                std::vector<int> triplet;
+                triplet.push_back(edges[istal][iel].first);
+                triplet.push_back(edges[istal][iel].second);
+                triplet.push_back(edges[istal + 1][iem].second);
+                const auto& hit1 = frWData.Hit(triplet[0]);
+                const auto& hit2 = frWData.Hit(triplet[1]);
+                const auto& hit3 = frWData.Hit(triplet[2]);
+
+                // jump triplet must be primary
+                y1    = hit1.Y();
+                z1    = hit1.Z() + 44.0f;
+                y3    = hit3.Y();
+                z3    = hit3.Z() + 44.0f;
+                slope = (y3 - y1) / (z3 - z1);
+                if (std::abs(y1 - slope * z1) > jump_margin_yz) continue;
+
+                // Cuts on triplet internal angle
+                // YZ angle difference
+                const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+                const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+                float angleDiffYZ    = angle1YZ - angle2YZ;
+                if (angleDiffYZ < -YZCut_Jump || angleDiffYZ > YZCut_Jump) continue;
+
+                // XZ slope and angle difference
+                const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+                const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+                float angleDiffXZ    = angle1XZ - angle2XZ;
+                if (angleDiffXZ < -XZCut_Jump || angleDiffXZ > XZCut_Jump) continue;
+
+                allTripletsIndex.push_back(triplet);
+              }
+            }
+          }
+        }
+        else if ((sta2 - sta1) == 2) {  // triplet types: [1 3 4]. First edge jump, second edge consecutive
+          if (sta1 >= 9) continue;      // skip triplet with jump edge to last station
+          if (edges[istal + 2].size() == 0) continue;  // skip empty edges
+          for (int iem = 0; iem < (int) edges[istal + 2].size(); iem++) {
+            if (edges[istal][iel].second == edges[istal + 2][iem].first) {  // jump to adjacent edge
+              std::vector<int> triplet;
+              triplet.push_back(edges[istal][iel].first);
+              triplet.push_back(edges[istal][iel].second);
+              triplet.push_back(edges[istal + 2][iem].second);
+              const auto& hit1 = frWData.Hit(triplet[0]);
+              const auto& hit2 = frWData.Hit(triplet[1]);
+              const auto& hit3 = frWData.Hit(triplet[2]);
+
+              // jump triplet must be primary
+              y1    = hit1.Y();
+              z1    = hit1.Z() + 44.0f;
+              y3    = hit3.Y();
+              z3    = hit3.Z() + 44.0f;
+              slope = (y3 - y1) / (z3 - z1);
+              if (std::abs(y1 - slope * z1) > jump_margin_yz) continue;
+
+              // Cuts on triplet internal angle
+              // YZ angle difference
+              const float angle1YZ = std::atan2(hit2.Y() - hit1.Y(), hit2.Z() - hit1.Z());
+              const float angle2YZ = std::atan2(hit3.Y() - hit2.Y(), hit3.Z() - hit2.Z());
+              float angleDiffYZ    = angle1YZ - angle2YZ;
+              if (std::abs(angleDiffYZ) > YZCut_Jump) continue;
+
+              // XZ slope and angle difference
+              const float angle1XZ = std::atan2(hit2.X() - hit1.X(), hit2.Z() - hit1.Z());
+              const float angle2XZ = std::atan2(hit3.X() - hit2.X(), hit3.Z() - hit2.Z());
+              float angleDiffXZ    = angle1XZ - angle2XZ;
+              if (std::abs(angleDiffXZ) > XZCut_Jump) continue;
+
+              allTripletsIndex.push_back(triplet);
+            }
+          }
+        }
+      }
+    }
+    if (allTripletsIndex.size() == 0) {
+      LOG(info) << "No triplets found. Exiting.";
+      return;
+    }
+    LOG(info) << "Number of triplets created from edges: " << allTripletsIndex.size();
+
+    for (int i = 0; i < (int) allTripletsIndex.size(); i++) {
+      triplets_.push_back(allTripletsIndex[i]);
+    }
+
+    FitTriplets(3);
+
+    if (mode == 0) {
+      // saveAllTripletsAsTracks();
+    }
+    else {
+      CreateTracksTriplets(mode, 3);
+    }
+  }  // FindAllSecJump
+
   /// combine overlapping triplets to form tracks. sort by length and score for competition
   void GraphConstructor::CreateTracksTriplets(const int mode, const int GNNIteration)
   {
@@ -326,7 +702,7 @@ namespace cbm::algo::ca
       /// remove tracks with chi2 > max_chi2. where max_chi2 is 10*(2*hits - 5) //@TODO: check this
       float trackChi2Cut = 10.0f;                   // When not fitting candidates and using q/p proxy to chi2.
       if (GNNIteration == 0) trackChi2Cut = 10.0f;  // def - 10
-      if (GNNIteration == 1) trackChi2Cut = 5.0f;   // def -
+      if (GNNIteration == 1) trackChi2Cut = 5.0f;   // def - 5
       for (int iTrack = 0; iTrack < (int) trackAndScores.size(); iTrack++) {
         if (trackAndScores[iTrack].second > trackChi2Cut * (trackAndScores[iTrack].first.size() - 2)) {
           trackAndScores.erase(trackAndScores.begin() + iTrack);
@@ -650,8 +1026,7 @@ namespace cbm::algo::ca
     LOG(info) << "Candidate triplets fitted with KF.";
 
     /// remove from tripletScores_ and triplets_, triplets that not selected by KF
-    auto tripletScoresTmp = tripletScores_;
-    auto tripletsTmp      = triplets_;
+    auto tripletsTmp = triplets_;
     triplets_.clear();
     tripletScores_.clear();
     triplets_.reserve(selectedTripletIndexes.size());
@@ -825,5 +1200,207 @@ namespace cbm::algo::ca
 
     LOG(info) << "End metric learning doublets";
   }
+
+  ///@brief: Create also edges which skip one station
+  void GraphConstructor::CreateMetricLearningDoubletsJump(const int iter)
+  {
+    LOG(info) << std::string(50, '-');
+    LOG(info) << "CreateMetricLearningDoubletsJump";
+    LOG(info) << std::string(50, '-');
+
+    std::vector<std::vector<float>> embedCoord;
+    embedCoord.reserve(10000);
+    std::vector<std::vector<float>> NNinput;
+    NNinput.reserve(10000);
+    std::vector<std::vector<std::vector<float>>> NNinputFinal;
+    std::vector<int> staStartIndex;
+    staStartIndex.reserve(NStations);
+    staStartIndex.push_back(0);
+    // Step 1 - embed all hits in time slice
+    {
+      std::vector<int> EmbNetTopology_ = {3, 16, 16, 6};
+      EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
+      const std::string srcDir         = "/home/tyagi/cbmroot/NN/";
+      if (iter == 0) {
+        std::string fNameModel   = "models/embed/embed";
+        std::string fNameWeights = srcDir + fNameModel + "Weights_test11.txt";
+        std::string fNameBiases  = srcDir + fNameModel + "Biases_test11.txt";
+        EmbNet_.loadModel(fNameWeights, fNameBiases);
+      }
+      else if (iter == 3 || iter == 1) {
+        std::string fNameModel   = "models/embed/embed";
+        std::string fNameWeights = srcDir + fNameModel + "Weights_test13.txt";
+        std::string fNameBiases  = srcDir + fNameModel + "Biases_test13.txt";
+        EmbNet_.loadModel(fNameWeights, fNameBiases);
+      }
+
+      std::vector<fscal> input;
+      for (int istal = 0; istal < NStations; istal++) {
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        staStartIndex.push_back(staStartIndex.back() + nGridEntriesL);
+        for (auto iel = 0; iel < nGridEntriesL; ++iel) {
+          ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          ca::Hit& hitl        = frWData.Hit(ihitl);
+          fscal x              = hitl.X();
+          fscal y              = hitl.Y();
+          fscal z              = hitl.Z() + 44.0f;  // shift z to positive
+          input.push_back(x);
+          input.push_back(y);
+          input.push_back(z);
+          NNinput.push_back(input);
+          input.clear();
+        }  // hit on station
+      }  // istal
+      NNinputFinal.push_back(NNinput);
+      EmbNet_.run(NNinputFinal);
+      EmbNet_.getEmbeddedCoords(embedCoord, 0);  // only works for event one.
+      LOG(info) << "EmbedCoord size: " << embedCoord.size();
+    }  // step 1
+
+
+    // Step 2 - use kNN to form doublets
+    {
+      // initialize doublets
+      std::vector<HitIndex_t> dum;
+      dum.push_back(0);
+      for (int istal = 0; istal < NStations; istal++) {
+        doublets[istal].clear();
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        doublets[istal].reserve(nGridEntriesL);
+        for (int iel = 0; iel < nGridEntriesL; iel++) {
+          doublets[istal].push_back(dum);
+        }
+      }
+
+      int kNNOrder_Jump = 10;  // jump doublets
+      int kNNOrder      = 25;
+      switch (iter) {
+        case 0: kNNOrder = maxNeighOrderPrim_; break;
+        case 1: {
+          kNNOrder_Jump = maxNeighOrderAllPrimJump_;
+          kNNOrder      = maxNeighOrderAllPrim_;
+          break;
+        }
+        case 3: {
+          kNNOrder_Jump = maxNeighOrderSecJump_;
+          kNNOrder      = maxNeighOrderSec_;
+          break;
+        }
+        default: break;
+      }
+
+      // Doublets without jump
+      std::vector<HitIndex_t> closestHitsWindow;
+      closestHitsWindow.reserve(kNNOrder + 1);
+      std::vector<HitIndex_t> closestHits;  // for finding maxDist when closestHits.size > maxNeighOrder
+      closestHits.reserve(kNNOrder + 1);
+      float maxDist    = 0.0f;
+      int maxDistIndex = 0;
+      float d          = 0.0f;
+
+      for (int istal = 0; istal < NStations; istal++) {
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        for (int iel = 0; iel < nGridEntriesL; iel++) {
+          ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          int nGridEntriesM    = frWData.Grid(istal + 1).GetEntries().size();
+          for (int iem = 0; iem < nGridEntriesM; iem++) {
+            ca::HitIndex_t ihitm = frWData.Grid(istal + 1).GetEntries()[iem].GetObjectId();  // index in fvHits
+            d                    = MLPutil::hitDistanceSq(embedCoord[staStartIndex[istal] + iel],
+                                                          embedCoord[staStartIndex[istal + 1] + iem]);
+            if (closestHitsWindow.size() < kNNOrder) {
+              closestHitsWindow.push_back(ihitm);
+              closestHits.push_back(staStartIndex[istal + 1] + iem);
+              if (d > maxDist) {
+                maxDist      = d;
+                maxDistIndex = closestHitsWindow.size() - 1;
+              }
+            }
+            else if (d < maxDist) {
+              closestHitsWindow.push_back(ihitm);
+              closestHitsWindow.erase(closestHitsWindow.begin() + maxDistIndex);
+              closestHits.push_back(staStartIndex[istal + 1] + iem);
+              closestHits.erase(closestHits.begin() + maxDistIndex);
+              maxDist = 0.0f;
+              for (int i = 0; i < (int) closestHits.size(); i++) {
+                d = MLPutil::hitDistanceSq(embedCoord[staStartIndex[istal] + iel], embedCoord[closestHits[i]]);
+                if (d > maxDist) {
+                  maxDist      = d;
+                  maxDistIndex = i;
+                }
+              }
+            }
+          }
+          doublets[istal][iel] = closestHitsWindow;
+          closestHitsWindow.clear();
+          closestHits.clear();
+          maxDist      = 0.0f;
+          maxDistIndex = 0;
+        }
+      }
+
+      // Doublets with one station skipped
+      closestHitsWindow.clear();
+      closestHitsWindow.reserve(kNNOrder_Jump + 1);
+      closestHits.clear();  // for finding maxDist when closestHits.size > maxNeighOrder
+      closestHits.reserve(kNNOrder_Jump + 1);
+      maxDist      = 0.0f;
+      maxDistIndex = 0;
+      d            = 0.0f;
+      for (int istal = 0; istal < NStations - 1; istal++) {
+        const int iStaNext      = istal + 2;  // skip one station
+        const int nGridEntriesL = frWData.Grid(istal).GetEntries().size();
+        for (int iel = 0; iel < nGridEntriesL; iel++) {
+          ca::HitIndex_t ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          int nGridEntriesM    = frWData.Grid(iStaNext).GetEntries().size();
+          for (int iem = 0; iem < nGridEntriesM; iem++) {
+            ca::HitIndex_t ihitm = frWData.Grid(iStaNext).GetEntries()[iem].GetObjectId();
+            d =
+              MLPutil::hitDistanceSq(embedCoord[staStartIndex[istal] + iel], embedCoord[staStartIndex[iStaNext] + iem]);
+            if (closestHitsWindow.size() < kNNOrder_Jump) {
+              closestHitsWindow.push_back(ihitm);
+              closestHits.push_back(staStartIndex[iStaNext] + iem);
+              if (d > maxDist) {
+                maxDist      = d;
+                maxDistIndex = closestHitsWindow.size() - 1;
+              }
+            }
+            else if (d < maxDist) {
+              closestHitsWindow.push_back(ihitm);
+              closestHitsWindow.erase(closestHitsWindow.begin() + maxDistIndex);
+              closestHits.push_back(staStartIndex[iStaNext] + iem);
+              closestHits.erase(closestHits.begin() + maxDistIndex);
+              maxDist = 0.0f;
+              for (int i = 0; i < (int) closestHits.size(); i++) {
+                d = MLPutil::hitDistanceSq(embedCoord[staStartIndex[istal] + iel], embedCoord[closestHits[i]]);
+                if (d > maxDist) {
+                  maxDist      = d;
+                  maxDistIndex = i;
+                }
+              }
+            }
+          }
+          // insert closestHitsWindow to end of doublets[istal][iel]
+          auto& temp = doublets[istal][iel];
+          temp.insert(temp.end(), closestHitsWindow.begin(), closestHitsWindow.end());
+          closestHitsWindow.clear();
+          closestHits.clear();
+          maxDist      = 0.0f;
+          maxDistIndex = 0;
+        }
+      }
+    }
+
+    /// count num of doublets
+    int numDoublets = 0;
+    for (int istal = 0; istal < NStations; istal++) {
+      for (int ih = 0; ih < (int) doublets[istal].size(); ih++) {
+        numDoublets += doublets[istal][ih].size();
+      }
+    }
+    LOG(info) << "Total Number of doublets with jump: " << numDoublets;
+
+    LOG(info) << "End metric learning doublets with Jump";
+  }  // CreateMetricLearningDoubletsJump
+
 
 }  // namespace cbm::algo::ca
