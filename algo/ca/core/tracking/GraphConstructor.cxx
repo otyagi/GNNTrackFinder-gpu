@@ -735,9 +735,9 @@ namespace cbm::algo::ca
     //   //   CandClassifier CandFinder          = CandClassifier(CandClassTopology);
     //   //   CandFinder.setTestThreshold(CandClassifierThreshold_);
 
-    //   //   std::string srcDir       = "/u/otyagi/cbmroot/NN/";
-    //   //   std::string fNameWeights = srcDir + "models/CandClassifier/CandClassWeights_13.txt";
-    //   //   std::string fNameBiases  = srcDir + "models/CandClassifier/CandClassBiases_13.txt";
+    //   //   std::string srcDir       = "/home/tyagi/cbmroot/NN/CandClassifier/";
+    //   //   std::string fNameWeights = srcDir + "CandClassWeights_13.txt";
+    //   //   std::string fNameBiases  = srcDir + "CandClassBiases_13.txt";
     //   //   CandFinder.loadModel(fNameWeights, fNameBiases);
 
     //   //   const float chi2Scaling = 50.0f;  // def - 50
