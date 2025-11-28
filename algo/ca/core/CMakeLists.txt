@@ -35,6 +35,7 @@ set(SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/GraphConstructor.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/EmbedNet.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/tracking/MLPMath.cxx
+  ${CMAKE_CURRENT_SOURCE_DIR}/tracking/CandClassifier.cxx
 
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTrackFinderSetup.cxx
   ${CMAKE_CURRENT_SOURCE_DIR}/experimental/CaGpuTripletConstructor.cxx
@@ -165,6 +166,7 @@ install(
     tracking/EmbedNet.h
     tracking/MLPMath.h
     tracking/MLPutil.h
+    tracking/CandClassifier.h
 
     experimental/CaDeviceImage.h
     experimental/CaGpuGrid.h

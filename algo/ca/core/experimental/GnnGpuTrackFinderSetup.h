@@ -76,7 +76,7 @@ namespace cbm::algo::ca
     /// Save triplets as tracks for debugging after KF fitting
     void SaveFittedTripletsAsTracks();
 
-    void FindTracksCpu(const bool doCompetition);
+    void FindTracksCpu(const int iteration, const bool doCompetition);
 
     /// Get the number of triplets
     unsigned int GetNofTriplets() const { return fNTriplets; }
@@ -90,7 +90,10 @@ namespace cbm::algo::ca
     xpu::queue fQueue;                             ///< GPU queue TODO: initialization is ~220 ms. Why and how to avoid?
     ca::GnnGpuGraphConstructor fGraphConstructor;  ///< GPU graph constructor
     unsigned int fIteration;                       ///< Iteration number
-    int fNHits;                                    ///< Number of hits
+    
+    int fNHits;                                    ///< Number of active hits
+    std::vector<ca::Hit> activeHits;                 ///< active hits in this iteration
+    std::vector<unsigned int> activeToWDataMapping;  ///< index of activeHit in window data
 
     int fNTriplets;  ///< Number of triplets
 

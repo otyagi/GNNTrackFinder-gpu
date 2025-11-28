@@ -42,10 +42,13 @@ namespace cbm::algo::ca
 
     void FitTriplets(const int GNNiteration);
 
+    void FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
+                      std::vector<std::vector<float>>& trackletFitParams);
+
     void PrepareFinalTracks();
 
     void CreateMetricLearningDoublets(const int iter);
-    
+
     void CreateMetricLearningDoubletsJump(const int iter);
 
     /// -- VARIABLES
@@ -78,7 +81,7 @@ namespace cbm::algo::ca
     const int maxNeighOrderSecJump_ = 10;  // def - 10 decent
 
     // Candidate classifier parameters
-    const bool useCandClassifier_        = false;
+    const bool useCandClassifier_        = true;
     const float CandClassifierThreshold_ = 0.5f;
   };
 }  // namespace cbm::algo::ca

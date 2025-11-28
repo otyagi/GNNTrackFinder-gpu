@@ -8,6 +8,8 @@
 
 #include "GraphConstructor.h"
 
+#include "CandClassifier.h"
+
 namespace cbm::algo::ca
 {
 
@@ -132,7 +134,6 @@ namespace cbm::algo::ca
       CreateTracksTriplets(mode, 0);
     }
   }  // FindFastPrim
-
 
   /// Slow primary and jump triplet
   void GraphConstructor::FindSlowPrimJump(const int mode)
@@ -337,11 +338,11 @@ namespace cbm::algo::ca
       edgesSta.reserve(2 * maxNeighOrderSec_ * doublets[istal].size());
       for (int iel = 0; iel < (int) doublets[istal].size(); iel++) {
         for (int iem = 0; iem < (int) doublets[istal][iel].size(); iem++) {
-          int ihitl = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
-          y1        = frWData.Hit(ihitl).Y();
-          z1        = frWData.Hit(ihitl).Z() + 44.0f;
-          y2        = frWData.Hit(doublets[istal][iel][iem]).Y();
-          z2        = frWData.Hit(doublets[istal][iel][iem]).Z() + 44.0f;
+          int ihitl     = frWData.Grid(istal).GetEntries()[iel].GetObjectId();  // index in fvHits
+          y1            = frWData.Hit(ihitl).Y();
+          z1            = frWData.Hit(ihitl).Z() + 44.0f;
+          y2            = frWData.Hit(doublets[istal][iel][iem]).Y();
+          z2            = frWData.Hit(doublets[istal][iel][iem]).Z() + 44.0f;
           slope         = (y2 - y1) / (z2 - z1);
           abs_intercept = std::abs(y1 - slope * z1);
           if (abs_intercept > outer_margin) {
@@ -711,88 +712,88 @@ namespace cbm::algo::ca
       }
       LOG(info) << "[iter 0] Num tracks after tracks chi2 cut: " << trackAndScores.size();
     }
-    // else if (GNNIteration == 3) {  // iter 3
-    //   // min length condition
-    //   auto trackletsTmp = tracklets;
-    //   tracklets.clear();
-    //   tracklets.reserve(10000);
-    //   auto trackletScoresTmp = trackletScores;
-    //   trackletScores.clear();
-    //   trackletScores.reserve(10000);
-    //   for (int itracklet = 0; itracklet < (int) trackletsTmp.size(); itracklet++) {
-    //     if (trackletsTmp[itracklet].size() >= min_length) {
-    //       tracklets.push_back(trackletsTmp[itracklet]);
-    //       trackletScores.push_back(trackletScoresTmp[itracklet]);
-    //     }
-    //   }
-    //   LOG(info) << "[iter 3] Num candidate tracks with length > 4: " << tracklets.size();
+    else if (GNNIteration == 3) {  // iter 3
+      // min length condition
+      auto trackletsTmp = tracklets;
+      tracklets.clear();
+      tracklets.reserve(10000);
+      auto trackletScoresTmp = trackletScores;
+      trackletScores.clear();
+      trackletScores.reserve(10000);
+      for (int itracklet = 0; itracklet < (int) trackletsTmp.size(); itracklet++) {
+        if (trackletsTmp[itracklet].size() >= min_length) {
+          tracklets.push_back(trackletsTmp[itracklet]);
+          trackletScores.push_back(trackletScoresTmp[itracklet]);
+        }
+      }
+      LOG(info) << "[iter 3] Num candidate tracks with length > 4: " << tracklets.size();
 
-    //   // FitTracklets(tracklets, trackletScores, trackletFitParams);  // scores is chi2 here.
+      FitTracklets(tracklets, trackletScores, trackletFitParams);  // scores is chi2 here.
 
-    //   // if (useCandClassifier_) {
-    //   //   LOG(info) << "[iter 3] Using candidate classifier...";
-    //   //   std::vector<int> CandClassTopology = {13, 32, 32, 32, 1};
-    //   //   CandClassifier CandFinder          = CandClassifier(CandClassTopology);
-    //   //   CandFinder.setTestThreshold(CandClassifierThreshold_);
+      if (useCandClassifier_) {
+        LOG(info) << "[iter 3] Using candidate classifier...";
+        std::vector<int> CandClassTopology = {13, 32, 32, 32, 1};
+        CandClassifier CandFinder          = CandClassifier(CandClassTopology);
+        CandFinder.setTestThreshold(CandClassifierThreshold_);
 
-    //   //   std::string srcDir       = "/home/tyagi/cbmroot/NN/CandClassifier/";
-    //   //   std::string fNameWeights = srcDir + "CandClassWeights_13.txt";
-    //   //   std::string fNameBiases  = srcDir + "CandClassBiases_13.txt";
-    //   //   CandFinder.loadModel(fNameWeights, fNameBiases);
+        std::string srcDir       = "/home/tyagi/cbmroot/NN/CandClassifier/";
+        std::string fNameWeights = srcDir + "CandClassWeights_13.txt";
+        std::string fNameBiases  = srcDir + "CandClassBiases_13.txt";
+        CandFinder.loadModel(fNameWeights, fNameBiases);
 
-    //   //   const float chi2Scaling = 50.0f;  // def - 50
-    //   //   Matrix allCands_ndfSelected;
-    //   //   std::vector<int> ndfSelected_id_in_tracklets;
-    //   //   // input to candidate classifier [chi2, tx, ty, qp, C00, C11, C22, C33, C44, ndf, x, y, z]
-    //   //   for (std::size_t iCand = 0; iCand < tracklets.size(); iCand++) {
-    //   //     const auto& Cand          = tracklets[iCand];
-    //   //     const auto& CandfitParams = trackletFitParams[iCand];
-    //   //     if (Cand.size() > 6) {  // add to trackAndScores directly if ndf > 7
-    //   //       trackAndScores.push_back(std::make_pair(Cand, trackletScores[iCand]));
-    //   //     }
-    //   //     else {  // pass to candidate classifier
-    //   //       std::vector<float> cand{CandfitParams};
-    //   //       cand[0] /= chi2Scaling;  // chi2 scaling
-    //   //       cand[4] *= 1e5;
-    //   //       cand[5] *= 1e3;
-    //   //       cand[6] *= 1e2;
-    //   //       cand[7] *= 1e2;
-    //   //       cand[9] /= 10.0f;   // ndf
-    //   //       cand[10] /= 50.0f;  // x
-    //   //       cand[11] /= 50.0f;  // y
-    //   //       cand[12] += 44.0f;  // z shift
-    //   //       cand[12] /= 50.0f;  // z scale
+        const float chi2Scaling = 50.0f;  // def - 50
+        Matrix allCands_ndfSelected;
+        std::vector<int> ndfSelected_id_in_tracklets;
+        // input to candidate classifier [chi2, tx, ty, qp, C00, C11, C22, C33, C44, ndf, x, y, z]
+        for (std::size_t iCand = 0; iCand < tracklets.size(); iCand++) {
+          const auto& Cand          = tracklets[iCand];
+          const auto& CandfitParams = trackletFitParams[iCand];
+          if (Cand.size() > 6) {  // add to trackAndScores directly if ndf > 7
+            trackAndScores.push_back(std::make_pair(Cand, trackletScores[iCand]));
+          }
+          else {  // pass to candidate classifier
+            std::vector<float> cand{CandfitParams};
+            cand[0] /= chi2Scaling;  // chi2 scaling
+            cand[4] *= 1e5;
+            cand[5] *= 1e3;
+            cand[6] *= 1e2;
+            cand[7] *= 1e2;
+            cand[9] /= 10.0f;   // ndf
+            cand[10] /= 50.0f;  // x
+            cand[11] /= 50.0f;  // y
+            cand[12] += 44.0f;  // z shift
+            cand[12] /= 50.0f;  // z scale
 
-    //   //       allCands_ndfSelected.push_back(cand);
-    //   //       ndfSelected_id_in_tracklets.push_back(iCand);
-    //   //     }
-    //   //   }
+            allCands_ndfSelected.push_back(cand);
+            ndfSelected_id_in_tracklets.push_back(iCand);
+          }
+        }
 
-    //     if (allCands_ndfSelected.size() == 0) {
-    //       LOG(info) << "[iter 3] No candidate tracks to classify!";
-    //       return;
-    //     }
-    //     std::vector<int> trueCandsIndex;    // index in allCands of true Candidates
-    //     std::vector<float> trueCandsScore;  // score of true edges
-    //     CandFinder.run(allCands_ndfSelected, trueCandsIndex, trueCandsScore);
+        if (allCands_ndfSelected.size() == 0) {
+          LOG(info) << "[iter 3] No candidate tracks to classify!";
+          return;
+        }
+        std::vector<int> trueCandsIndex;    // index in allCands of true Candidates
+        std::vector<float> trueCandsScore;  // score of true edges
+        CandFinder.run(allCands_ndfSelected, trueCandsIndex, trueCandsScore);
 
-    //     // add trueCandsIndex to trackAndScores
-    //     for (std::size_t iCand = 0; iCand < trueCandsIndex.size(); iCand++) {
-    //       const auto& Cand = tracklets[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];
-    //       float score      = trackletScores[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];  // chi2
-    //       // float score = trueCandsScore[iCand];  // classifier score
-    //       trackAndScores.push_back(std::make_pair(Cand, score));
-    //     }
-    //     LOG(info) << "[iter 3] Num candidate tracks after fitting and classifier filtering: " << trackAndScores.size();
-    //   }
-    //   else {
-    //     LOG(info) << "[iter 3] No candidate classifier used!";
-    //     for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {
-    //       trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
-    //     }
-    //     LOG(info) << "[iter 3] Num candidate tracks after fitting: " << trackAndScores.size();
-    //   }
-    // }
+        // add trueCandsIndex to trackAndScores
+        for (std::size_t iCand = 0; iCand < trueCandsIndex.size(); iCand++) {
+          const auto& Cand = tracklets[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];
+          float score      = trackletScores[ndfSelected_id_in_tracklets[trueCandsIndex[iCand]]];  // chi2
+          // float score = trueCandsScore[iCand];  // classifier score
+          trackAndScores.push_back(std::make_pair(Cand, score));
+        }
+        LOG(info) << "[iter 3] Num candidate tracks after fitting and classifier filtering: " << trackAndScores.size();
+      }
+      else {
+        LOG(info) << "[iter 3] No candidate classifier used!";
+        for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {
+          trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
+        }
+        LOG(info) << "[iter 3] Num candidate tracks after fitting: " << trackAndScores.size();
+      }
+    }
 
     if (mode == 2) {  // do track competition
 
@@ -1041,6 +1042,59 @@ namespace cbm::algo::ca
     LOG(info) << "Num triplets after KF fit: " << tripletScores_.size();
   }  // FitTriplets
 
+  void GraphConstructor::FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
+                                      std::vector<std::vector<float>>& trackletFitParams)
+  {
+    Vector<int> selectedTrackIndexes;
+    Vector<float> selectedTrackScores;
+    Vector<Track> GNNTrackCandidates;
+    Vector<HitIndex_t> GNNTrackHits;
+    GNNTrackCandidates.reserve(tracklets.size());
+    GNNTrackHits.reserve(tracklets.size() * 10);
+    selectedTrackIndexes.reserve(tracklets.size());
+    selectedTrackScores.reserve(tracklets.size());
+
+    std::vector<std::vector<float>>
+      selectedTrackFitParams;  // [chi2, qp, Cqp, T3.Tx()[0], T3.C22()[0], T3.Ty()[0], T3.C33()[0]]
+    selectedTrackFitParams.reserve(tracklets.size());
+
+    for (const auto& trackCand : tracklets) {
+      for (const auto& hit : trackCand) {
+        const int hitID = frWData.Hit(hit).Id();  // get hit id in fInputData
+        GNNTrackHits.push_back(hitID);
+      }
+      Track t;
+      t.fNofHits = trackCand.size();
+      GNNTrackCandidates.push_back(t);
+    }
+
+    frTrackFitter.FitGNNTracklets(frInput, frWData, GNNTrackCandidates, GNNTrackHits, selectedTrackIndexes, selectedTrackScores,
+                                        selectedTrackFitParams, 3);
+    LOG(info) << "Candidate tracks fitted with KF.";
+
+    /// print track params of first 10 tracks
+    // for (int i = 0; i < 10; i++) {
+    //   std::cout << "Track " << i << " chi2 = " << TrackFitParams[i][0] << " qp = " << TrackFitParams[i][1]
+    //             << " Cqp = " << TrackFitParams[i][2] << " Tx = " << TrackFitParams[i][3] << " C22 = " << TrackFitParams[i][4]
+    //             << " Ty = " << TrackFitParams[i][5] << " C33 = " << TrackFitParams[i][6] << std::endl;
+    // }
+
+    /// remove from tracklets, tracks not selected by KF
+    auto trackletsTmp = tracklets;
+    tracklets.clear();
+    tracklets.reserve(selectedTrackIndexes.size());
+    trackletScores.clear();
+    trackletScores.reserve(selectedTrackIndexes.size());
+    trackletFitParams.clear();
+    trackletFitParams.reserve(selectedTrackIndexes.size());
+    for (std::size_t i = 0; i < selectedTrackIndexes.size(); ++i) {
+      trackletScores.push_back(selectedTrackScores[i]);
+      trackletFitParams.push_back(selectedTrackFitParams[i]);
+      tracklets.push_back(trackletsTmp[selectedTrackIndexes[i]]);
+    }
+    LOG(info) << "Num tracks after KF fit: " << trackletScores.size();
+  } // FitTracklets
+
   // @brief: add tracks and hits to final containers
   void GraphConstructor::PrepareFinalTracks()
   {
@@ -1222,15 +1276,15 @@ namespace cbm::algo::ca
       EmbedNet EmbNet_                 = EmbedNet(EmbNetTopology_);
       const std::string srcDir         = "/home/tyagi/cbmroot/NN/";
       if (iter == 0) {
-        std::string fNameModel   = "models/embed/embed";
-        std::string fNameWeights = srcDir + fNameModel + "Weights_test11.txt";
-        std::string fNameBiases  = srcDir + fNameModel + "Biases_test11.txt";
+        std::string fNameModel   = "embed/embed";
+        std::string fNameWeights = srcDir + fNameModel + "Weights_11.txt";
+        std::string fNameBiases  = srcDir + fNameModel + "Biases_11.txt";
         EmbNet_.loadModel(fNameWeights, fNameBiases);
       }
       else if (iter == 3 || iter == 1) {
-        std::string fNameModel   = "models/embed/embed";
-        std::string fNameWeights = srcDir + fNameModel + "Weights_test13.txt";
-        std::string fNameBiases  = srcDir + fNameModel + "Biases_test13.txt";
+        std::string fNameModel   = "embed/embed";
+        std::string fNameWeights = srcDir + fNameModel + "Weights_13.txt";
+        std::string fNameBiases  = srcDir + fNameModel + "Biases_13.txt";
         EmbNet_.loadModel(fNameWeights, fNameBiases);
       }
 

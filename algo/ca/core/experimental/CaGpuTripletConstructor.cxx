@@ -1050,7 +1050,9 @@ XPU_D void GpuTripletConstructor::ExtrapolateStep(kf::TrackParamBase<float>* tr_
   //  const float stepW[5] = {0., h * 0.166667f, h * 0.333334f, h * 0.333334f, h * 0.166667f};	//TODO: test constants: leads to a drop in efficiency
 
   float k[5][7][7] = {{0.}};
+  #pragma unroll
   for (int step = 1; step <= 4; ++step) {
+    #pragma unroll
     for (int i = 0; i < 7; i++) {
       for (int j = 0; j < 7; j++) {
         k[step][i][j] = F[step][i][j];

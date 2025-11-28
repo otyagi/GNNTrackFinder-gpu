@@ -194,8 +194,8 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   }
 
   bool isCpu              = xpu::device::active().backend() == xpu::cpu;
-  float embedHitsBlocks   = std::ceil((float) frWData.Hits().size() / GnnGpuConstants::kEmbedHitsBlockSize);
-  float fitTripletsBlocks = std::ceil((frWData.Hits().size() * 400.f) / GnnGpuConstants::kEmbedHitsBlockSize);
+  float embedHitsBlocks   = std::ceil((float) activeHits.size() / GnnGpuConstants::kEmbedHitsBlockSize);
+  float fitTripletsBlocks = std::ceil((activeHits.size() * 400.f) / GnnGpuConstants::kEmbedHitsBlockSize);
 
   fGraphConstructor.fIteration = fIteration;
 
@@ -209,7 +209,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
 
   fQueue.launch<EmbedHits>(xpu::n_blocks(embedHitsBlocks));
 
-  LOG(info) << "Num hits in event: " << frWData.Hits().size();
+  LOG(info) << "Num hits in event: " << activeHits.size();
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                       = xpu::pop_timer();
     fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
@@ -412,7 +412,7 @@ void GnnGpuTrackFinderSetup::SaveFittedTripletsAsTracks()
   LOG(info) << "Num triplets as tracks (after fitting): " << nTriplets;
 }
 
-void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
+void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCompetition)
 {
   std::vector<std::vector<unsigned int>> tracklets;
   tracklets.reserve(10000000);
@@ -421,7 +421,7 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
   std::vector<std::array<float, 7>> trackletFitParams;  // store fit params of last triplet added to tracklet
   trackletFitParams.reserve(10000000);
 
-  const unsigned int nHits = frWData.Hits().size();
+  const unsigned int nHits = activeHits.size();
   int nTriplets            = 0;
   for (unsigned int iHitL = 0; iHitL < nHits; iHitL++) {
     const auto& hitL = fGraphConstructor.fvHits[iHitL];
@@ -432,9 +432,9 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
       const bool isSelected = fGraphConstructor.fTripletsSelected[iHitL][iTriplet];
       if (!isSelected) continue;
       const auto& tripletsIndexes = tripletsHitL[iTriplet];
-      const auto& hitM            = fGraphConstructor.fvHits[tripletsIndexes[0]];
-      const auto& hitR            = fGraphConstructor.fvHits[tripletsIndexes[1]];
-      tracklets.push_back(std::vector<unsigned int>{iHitL, tripletsIndexes[0], tripletsIndexes[1]});
+      tracklets.push_back(std::vector<unsigned int>{activeToWDataMapping[iHitL],
+                                                    activeToWDataMapping[tripletsIndexes[0]],
+                                                    activeToWDataMapping[tripletsIndexes[1]]});
       trackletScores.push_back(0.);
       const auto tripletParam = fGraphConstructor.fvTripletParams[iHitL][iTriplet];
       trackletFitParams.push_back(tripletParam);
@@ -567,18 +567,16 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
   if (doCompetition) {  // do track competition
 
     /// sort tracks by length and lower scores (chi2) first
-    std::sort(trackAndScores.begin(), trackAndScores.end(),
-              [](const std::pair<std::vector<unsigned int>, float>& a, const std::pair<std::vector<unsigned int>, float>& b) {
-                if (a.first.size() == b.first.size()) {
-                  return a.second < b.second;
-                }
-                return a.first.size() > b.first.size();
-              });
+    std::sort(
+      trackAndScores.begin(), trackAndScores.end(),
+      [](const std::pair<std::vector<unsigned int>, float>& a, const std::pair<std::vector<unsigned int>, float>& b) {
+        if (a.first.size() == b.first.size()) {
+          return a.second < b.second;
+        }
+        return a.first.size() > b.first.size();
+      });
     LOG(info) << "Tracks sorted.";
 
-#define ALTRUISTIC_COMP
-#ifdef ALTRUISTIC_COMP
-    /// --- TEST ---
     for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
       /// check that all hits are not used
       auto& track    = trackAndScores[iTrack].first;
@@ -662,15 +660,17 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
         frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
       }
     }
-#endif  // ALTRUISTIC_COMP
 
   }  // track competition
 
   // save tracks
-  frWData.RecoHitIndices().reserve(200000);
-  frWData.RecoTracks().reserve(100000);
+  if (iteration == 0) {
+    frWData.RecoHitIndices().reserve(200000);
+    frWData.RecoTracks().reserve(100000);
+  }
 
-  if (trackAndScores.size() == 0) {  // no tracks found
+  if (trackAndScores.size() == 0) {
+    LOG(info) << "No tracks found in iteration: " << iteration;
     return;
   }
   for (const auto& [track, _] : trackAndScores) {
@@ -692,7 +692,26 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const bool doCompetition)
 void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
 {
   const int nStations = fParameters.GetNstationsActive();
-  const int NHits     = frWData.Hits().size();
+
+  // get active hits from all hits
+  activeHits.clear();
+  activeHits.reserve(10000);
+  activeToWDataMapping.clear();
+  activeToWDataMapping.reserve(10000);
+  for (auto i = 0; i < frWData.Hits().size(); i++) {
+    if (!(frWData.IsHitKeyUsed(frWData.Hit(i).FrontKey())
+          || frWData.IsHitKeyUsed(frWData.Hit(i).BackKey()))) {  // true when hit active
+      activeHits.push_back(frWData.Hit(i));
+      activeToWDataMapping.push_back(i);
+    }
+  }
+  const int NHits = activeHits.size();
+  LOG(info) << "Active hits: " << NHits;
+
+  fGraphConstructor.fvHits.reset(NHits, xpu::buf_io);
+  xpu::h_view vfvHits{fGraphConstructor.fvHits};
+  std::copy_n(activeHits.begin(), NHits, &vfvHits[0]);
+  fQueue.copy(fGraphConstructor.fvHits, xpu::h2d);
 
   fGraphConstructor.fEmbedCoord.reset(NHits, xpu::buf_io);
 
@@ -705,11 +724,11 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
     std::string fNameBiases  = srcDir + fNameModel + "Biases_11.txt";
     EmbNet_.loadModel(fNameWeights, fNameBiases);
   }
-  else if (iteration == 3) {
-    // std::string fNameModel   = "embed/embed";
-    // std::string fNameWeights = srcDir + fNameModel + "Weights_13.txt";
-    // std::string fNameBiases  = srcDir + fNameModel + "Biases_13.txt";
-    // EmbNet_.loadModel(fNameWeights, fNameBiases);
+  else if (iteration == 1 || iteration == 3) {
+    std::string fNameModel   = "embed/embed";
+    std::string fNameWeights = srcDir + fNameModel + "Weights_13.txt";
+    std::string fNameBiases  = srcDir + fNameModel + "Biases_13.txt";
+    EmbNet_.loadModel(fNameWeights, fNameBiases);
   }
   const auto weights = EmbNet_.getWeights();
   const auto biases  = EmbNet_.getBias();
@@ -772,22 +791,20 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   fGraphConstructor.fIndexFirstHitStation.reset(nStations + 1, xpu::buf_io);
   xpu::h_view fvIndexFirstHitStation{fGraphConstructor.fIndexFirstHitStation};
 
-  int iHit    = 0;
-  int lastSta = 0;
-
+  int iHit                        = 0;
+  int lastSta                     = 0;
   fvIndexFirstHitStation[lastSta] = 0;
-  for (const auto& hit : frWData.Hits()) {
+  for (const auto& hit : activeHits) {
     // LOG(info) << "Hit: " << iHit << " , Station: " << hit.Station(); // hits ordered by Station
     const int curSta = hit.Station();
-    if (curSta == lastSta + 1) {
-      fvIndexFirstHitStation[curSta] = iHit;
-      // LOG(info) << fvIndexFirstHitStation[curSta];
+    if (curSta > lastSta) {
+      for (int iSta = lastSta + 1; iSta <= curSta; iSta++)
+        fvIndexFirstHitStation[iSta] = iHit;
       lastSta = curSta;
     }
     iHit++;
   }
   fvIndexFirstHitStation[nStations] = iHit;
-  // LOG(info) << iHit;
   fQueue.copy(fGraphConstructor.fIndexFirstHitStation, xpu::h2d);
 
   // Set Triplets

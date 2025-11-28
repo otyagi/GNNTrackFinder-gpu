@@ -49,15 +49,19 @@ namespace cbm::algo::ca
 
     /// Fit triplets found by GNN
     void FitGNNTriplets(const ca::InputData& input, WindowData& wData, Vector<Track>& tripletCandidates,
-                                     Vector<HitIndex_t>& tripletHits, Vector<int>& selectedTripletIndexes,
-                                     Vector<float>& selectedTripletScores,
-                                     std::vector<std::vector<float>>& selectedTripletParams, const int GNNiteration);
+                        Vector<HitIndex_t>& tripletHits, Vector<int>& selectedTripletIndexes,
+                        Vector<float>& selectedTripletScores, std::vector<std::vector<float>>& selectedTripletParams,
+                        const int GNNiteration);
 
+    // Fit track candidates before track selection
+    void FitGNNTracklets(const ca::InputData& input, WindowData& wData, Vector<Track>& trackCandidates,
+                         Vector<HitIndex_t>& trackHits, Vector<int>& selectedTrackIndexes,
+                         Vector<float>& selectedTrackScores, std::vector<std::vector<float>>& selectedTrackParams,
+                         const int GNNiteration);
 
    private:
     ///-------------------------------
     /// Data members
-
     const Parameters<fvec>& fParameters;            ///< Object of Framework parameters class
     const cbm::algo::kf::Setup<fvec>& fSetup;       ///< Setup instance
     fscal fDefaultMass{constants::phys::MuonMass};  ///< mass of the propagated particle [GeV/c2]

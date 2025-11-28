@@ -31,8 +31,8 @@ namespace cbm::algo
     kSingletConstructorBlockSize      = 512,
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
-    kEmbedHitsBlockSize = 64,
-    kScanBlockSize = 1024,
+    kEmbedHitsBlockSize   = 64,
+    kScanBlockSize        = 1024,
     kCompressionBlockSize = 64,
 #endif
   };
@@ -54,21 +54,42 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
-  struct NearestNeighbours : xpu::kernel<GPUReco> {
+  struct NearestNeighbours_FastPrim : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
     XPU_D void operator()(context& ctx);
   };
 
-  struct MakeTripletsOT : xpu::kernel<GPUReco> {
+  struct NearestNeighbours_Other : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx, int);
+  };
+
+  struct MakeTripletsOT_FastPrim : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
     XPU_D void operator()(context& ctx);
   };
 
-  struct FitTripletsOT : xpu::kernel<GPUReco> {
+  struct MakeTripletsOT_Other : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx, int);
+  };
+
+  struct FitTripletsOT_FastPrim : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<kEmbedHitsBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
+    XPU_D void operator()(context& ctx);
+  };
+
+  struct FitTripletsOT_Other : xpu::kernel<GPUReco> {
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
@@ -83,27 +104,27 @@ namespace cbm::algo::ca
   };
 
   struct ExclusiveScan : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<kScanBlockSize>;
-    using scan_t = xpu::block_scan<int, kScanBlockSize>;
-    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
+    using block_size    = xpu::block_size<kScanBlockSize>;
+    using scan_t        = xpu::block_scan<int, kScanBlockSize>;
+    using constants     = xpu::cmem<strGnnGpuGraphConstructor>;
     using shared_memory = scan_t::storage_t;
-    using context = xpu::kernel_context<shared_memory, constants>;
+    using context       = xpu::kernel_context<shared_memory, constants>;
     XPU_D void operator()(context&);
   };
 
   struct AddBlockSums : xpu::kernel<GPUReco> {
-    using block_size = xpu::block_size<kScanBlockSize>;
-    using scan_t = xpu::block_scan<int, kScanBlockSize>;
-    using constants = xpu::cmem<strGnnGpuGraphConstructor>;
+    using block_size    = xpu::block_size<kScanBlockSize>;
+    using scan_t        = xpu::block_scan<int, kScanBlockSize>;
+    using constants     = xpu::cmem<strGnnGpuGraphConstructor>;
     using shared_memory = scan_t::storage_t;
-    using context = xpu::kernel_context<shared_memory, constants>;
+    using context       = xpu::kernel_context<shared_memory, constants>;
     XPU_D void operator()(context&, int);
   };
 
   struct AddOffsets : xpu::kernel<GPUReco> {
-    using block_size    = xpu::block_size<kScanBlockSize>;
-    using constants     = xpu::cmem<strGnnGpuGraphConstructor>;
-    using context       = xpu::kernel_context<shared_memory, constants>;
+    using block_size = xpu::block_size<kScanBlockSize>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<shared_memory, constants>;
     XPU_D void operator()(context&);
   };
 
@@ -129,11 +150,17 @@ namespace cbm::algo::ca
     ///                             ------  FUNCTIONAL PART ------
     XPU_D void EmbedHits(EmbedHits::context&) const;
 
-    XPU_D void NearestNeighbours(NearestNeighbours::context&) const;
+    XPU_D void NearestNeighbours_FastPrim(NearestNeighbours_FastPrim::context&) const;
 
-    XPU_D void MakeTripletsOT(MakeTripletsOT::context&) const;
+    XPU_D void NearestNeighbours_Other(NearestNeighbours_Other::context&, const int iteration) const;
 
-    XPU_D void FitTripletsOT(FitTripletsOT::context&) const;
+    XPU_D void MakeTripletsOT_FastPrim(MakeTripletsOT_FastPrim::context&) const;
+
+    XPU_D void MakeTripletsOT_Other(MakeTripletsOT_Other::context&, const int iteration) const;
+
+    XPU_D void FitTripletsOT_FastPrim(FitTripletsOT_FastPrim::context&) const;
+
+    XPU_D void FitTripletsOT_Other(FitTripletsOT_Other::context&) const;
 
     XPU_D void ConstructCandidates(ConstructCandidates::context&) const;
 
@@ -163,10 +190,8 @@ namespace cbm::algo::ca
 
     ///                          ------  DATA MEMBERS ------
    public:
-    xpu::buffer<ca::GpuGrid> fvGpuGrid;  ///< Grid for every station
-
+    xpu::buffer<ca::GpuGrid> fvGpuGrid;                 ///< Grid for every station
     xpu::buffer<unsigned int> fgridFirstBinEntryIndex;  ///< Index of the first entry in the grid
-
     xpu::buffer<unsigned int> fgridEntries;  ///< Entries in the grid	//TODO: check if it should be ca::HitIndex_t
 
     ///Material map
@@ -196,15 +221,42 @@ namespace cbm::algo::ca
     // Metric learning
     xpu::buffer<std::array<float, 6>> fEmbedCoord;
     xpu::buffer<GnnGpuEmbedNet> fEmbedParameters;
-    constexpr static const int kNNOrder = 20;                   // FastPrim
-    xpu::buffer<std::array<unsigned int, kNNOrder>> fDoublets;  // neighbours of every hit from kNN. Hit index in fvHits
-    xpu::buffer<unsigned int> fNNeighbours;                     // num doublets for each hit, max kNNOrder
+
+    // Doublets
+    xpu::buffer<unsigned int> fNNeighbours;  // num doublets for each hit, max kNNOrder
+
+    // FastPrim
+    constexpr static const int kNN_FastPrim = 20;
+    xpu::buffer<std::array<unsigned int, kNN_FastPrim>>
+      fDoublets_FastPrim;  // neighbours of every hit from kNN. Hit index in fvHits
+
+    // Other
+    constexpr static const float margin_allPrim = 5.0; // def - 5
+    constexpr static const float margin_allSec = 100.0; // def - 100
+    constexpr static const int kNN_Other = 25 + 10;
+    xpu::buffer<std::array<unsigned int, kNN_Other>> fDoublets_Other;
 
     // triplet construction
-    xpu::buffer<std::array<std::array<unsigned int, 2>, kNNOrder * kNNOrder>>
-      fTriplets;                           // Triplets from hit. Can be max kNNOrder**2. Hit index in fvHits
     xpu::buffer<unsigned int> fNTriplets;  // num triplets from hit
 
+    // FastPrim
+    xpu::buffer<std::array<std::array<unsigned int, 2>, kNN_FastPrim * kNN_FastPrim>>
+      fTriplets_FastPrim;  // Triplets from hit. Can be max kNNOrder**2. Hit index in fvHits
+
+    // AllPrim
+    xpu::buffer<std::array<std::array<unsigned int, 2>, kNN_Other * kNN_Other>> fTriplets_Other;
+
+    // triplet fitting
+    // FastPrim
+    xpu::buffer<std::array<bool, kNN_FastPrim * kNN_FastPrim>>
+      fTripletsSelected_FastPrim;  // true where triplet passed KF fit check
+    xpu::buffer<std::array<std::array<float, 7>, kNN_FastPrim * kNN_FastPrim>> fvTripletParams_FastPrim;  ///< Triplet parameters
+
+    // AllPrim
+    xpu::buffer<std::array<bool, kNN_Other * kNN_Other>> fTripletsSelected_Other;
+    xpu::buffer<std::array<std::array<float, 7>, kNN_Other * kNN_Other>> fvTripletParams_Other;
+
+    /// -- TEST --
     /// flatten triplets
     // Scan buffers
     xpu::buffer<unsigned int> fOffsets;           // size: fIterationData[0].fNHits
@@ -214,10 +266,6 @@ namespace cbm::algo::ca
     // Output
     xpu::buffer<std::array<unsigned int, 2>> fTripletsFlat;  // size: total (or maximal) capacity
     xpu::buffer<unsigned int> fTotalTriplets;                // size: 1 (optional)
-
-    // triplet fitting
-    xpu::buffer<std::array<bool, kNNOrder * kNNOrder>> fTripletsSelected;  // true where triplet passed KF fit check
-    xpu::buffer<std::array<std::array<float, 7>, kNNOrder * kNNOrder>> fvTripletParams;  ///< Triplet parameters
   };
 
 }  // namespace cbm::algo::ca

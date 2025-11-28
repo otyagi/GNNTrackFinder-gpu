@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <math.h>
-#include <omp.h>
 
 class MLPMath {
  private:

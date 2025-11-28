@@ -111,12 +111,12 @@ namespace cbm::algo::ca::constants
     constexpr int MaxDoubletsFromHit     = 150;    ///< Maximum number of doublets from a hit
     constexpr int MaxTripletsFromDoublet = 15;     ///< Maximum number of triplets from a doublet
     constexpr int MaxNofStations         = 20;     ///< Maximum number of stations //TODO: temporary solution
-    constexpr bool GpuTracking           = false;  ///< Flag: use GPU for tracking
+    constexpr bool GpuTracking           = false;  ///< Flag: use for CA GPU for tracking
     constexpr bool GpuTimeMonitoring     = true;   ///< Flag: use GPU for time monitoring
     constexpr bool GpuSortTriplets       = false;  ///< Flag: use GPU for sorting triplets
     constexpr bool CpuSortTriplets       = true;   ///< Flag: use CPU for sorting triplets
-    constexpr bool GnnTracking           = true;   ///< Flag: use OT GNN for tracking
-    constexpr bool GnnGpuTracking        = false;   ///< Flag: use OT GPU GNN for tracking
+    constexpr bool GnnTracking           = true;   ///< Flag: use GNN for tracking
+    constexpr bool GnnGpuTracking        = true;   ///< Flag: use GPU GNN for tracking
   }  // namespace gpu
 
   /// \brief Undefined values
