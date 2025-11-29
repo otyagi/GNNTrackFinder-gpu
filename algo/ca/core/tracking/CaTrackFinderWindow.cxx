@@ -145,7 +145,7 @@ namespace cbm::algo::ca
 
       // Set up environment for GPU tracking
       xpu::push_timer("gpuTFinit");
-      GnnGpuTrackFinderSetup.emplace(wData, fParameters);
+      GnnGpuTrackFinderSetup.emplace(wData, fParameters, input, fTrackFitter);
       xpu::timings gpuTFinit = xpu::pop_timer();
       if constexpr (constants::gpu::GpuTimeMonitoring) {
         LOG(info) << "GPU tracking :: Initialization: " << gpuTFinit.wall() << " ms";
@@ -179,6 +179,11 @@ namespace cbm::algo::ca
       frMonitorData.StartTimer(ETimer::FindTracks);
       auto& caIterations = fParameters.GetCAIterations();
       for (auto iter = caIterations.begin(); iter != caIterations.end(); ++iter) {
+        if (iter_num == 2) {
+          LOG(info) << "Skip 3rd iteration of CA";
+          iter_num++;
+          continue;
+        }
         // ----- Prepare iteration -----
         frMonitorData.StartTimer(ETimer::PrepareIteration);
         PrepareCAIteration(*iter, wData, iter == caIterations.begin());
@@ -245,19 +250,19 @@ namespace cbm::algo::ca
     }
 
     // Fit tracks
-    frMonitorData.StartTimer(ETimer::FitTracks);
-    fTrackFitter.FitCaTracks(input, wData);
-    frMonitorData.StopTimer(ETimer::FitTracks);
+    // frMonitorData.StartTimer(ETimer::FitTracks);
+    // fTrackFitter.FitCaTracks(input, wData);
+    // frMonitorData.StopTimer(ETimer::FitTracks);
 
-    // Merge clones
-    frMonitorData.StartTimer(ETimer::MergeClones);
-    fCloneMerger.Exec(input, wData);
-    frMonitorData.StopTimer(ETimer::MergeClones);
+    // // Merge clones
+    // frMonitorData.StartTimer(ETimer::MergeClones);
+    // fCloneMerger.Exec(input, wData);
+    // frMonitorData.StopTimer(ETimer::MergeClones);
 
-    // Fit tracks
-    frMonitorData.StartTimer(ETimer::FitTracks);
-    fTrackFitter.FitCaTracks(input, wData);
-    frMonitorData.StopTimer(ETimer::FitTracks);
+    // // Fit tracks
+    // frMonitorData.StartTimer(ETimer::FitTracks);
+    // fTrackFitter.FitCaTracks(input, wData);
+    // frMonitorData.StopTimer(ETimer::FitTracks);
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1001,7 +1006,16 @@ namespace cbm::algo::ca
     // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks();
     // GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
     // GnnGpuTrackFinderSetup.SaveFittedTripletsAsTracks();
-    GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);  //doCompetition
+    if (iteration == 0) {
+      GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);
+    }
+    else if (iteration == 1) {
+      // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks(); 
+      GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);
+    }
+    else if (iteration == 3){
+
+    }
   }
 
   // -------------------------------------------------------------------------------------------------------------------

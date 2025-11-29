@@ -29,9 +29,9 @@ XPU_D void NearestNeighbours_FastPrim::operator()(context& ctx)
 }
 
 XPU_EXPORT(NearestNeighbours_Other);
-XPU_D void NearestNeighbours_Other::operator()(context& ctx, const int iteration)
+XPU_D void NearestNeighbours_Other::operator()(context& ctx)
 {
-  ctx.cmem<strGnnGpuGraphConstructor>().NearestNeighbours_Other(ctx, iteration);
+  ctx.cmem<strGnnGpuGraphConstructor>().NearestNeighbours_Other(ctx);
 }
 
 XPU_EXPORT(MakeTripletsOT_FastPrim);
@@ -50,6 +50,12 @@ XPU_EXPORT(FitTripletsOT_FastPrim);
 XPU_D void FitTripletsOT_FastPrim::operator()(context& ctx)
 {
   ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT_FastPrim(ctx);
+}
+
+XPU_EXPORT(FitTripletsOT_Other);
+XPU_D void FitTripletsOT_Other::operator()(context& ctx)
+{
+  ctx.cmem<strGnnGpuGraphConstructor>().FitTripletsOT_Other(ctx);
 }
 
 XPU_EXPORT(ConstructCandidates);
@@ -79,7 +85,7 @@ XPU_D void CompressAllTripletsOrdered::operator()(context& ctx)
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  if (iGThread >= fIterationData[0].fNHits) return;
+  if (iGThread >= fNHits) return;
 
   const auto& hitl = fvHits[iGThread];
 
@@ -93,7 +99,7 @@ XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 XPU_D void GnnGpuGraphConstructor::NearestNeighbours_FastPrim(NearestNeighbours_FastPrim::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  if (iGThread >= fIterationData[0].fNHits) return;
+  if (iGThread >= fNHits) return;
 
   const float margin = 2.0f;  // FastPrim
   auto& neighbours   = fDoublets_FastPrim[iGThread];
@@ -121,8 +127,6 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_FastPrim(NearestNeighbours_
     const float z_m   = hitm.Z() + 44.0f;
     const float slope = (y_m - y_l) / (z_m - z_l);
     if (xpu::abs(y_l - slope * z_l) > margin) continue;
-
-    // embedding distance
     const float dist = hitDistanceSq(fEmbedCoord[iGThread], fEmbedCoord[ihitm]);
 
     if (neighCount < kNN_FastPrim) {
@@ -148,15 +152,14 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_FastPrim(NearestNeighbours_
   fNNeighbours[iGThread] = neighCount;
 }
 
-XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Other::context& ctx,
-                                                           const int iteration) const
+XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Other::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  if (iGThread >= fIterationData[0].fNHits) return;
+  if (iGThread >= fNHits) return;
 
   float margin = 2.0f;
-  if (iteration == 1) margin = margin_allPrim;
-  if (iteration == 3) margin = margin_allSec;
+  if (fIteration == 1) margin = margin_allPrim;
+  if (fIteration == 3) margin = margin_allSec;
 
   auto& neighbours   = fDoublets_Other[iGThread];
   int neighCount     = 0;
@@ -183,10 +186,7 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Oth
     const float z_m   = hitm.Z() + 44.0f;
     const float slope = (y_m - y_l) / (z_m - z_l);
     if (xpu::abs(y_l - slope * z_l) > margin) continue;
-
-    // embedding distance
     const float dist = hitDistanceSq(fEmbedCoord[iGThread], fEmbedCoord[ihitm]);
-
     if (neighCount < 25) {
       neighbours[neighCount++] = ihitm;
       if (dist > maxDist) {
@@ -212,9 +212,9 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Oth
     return;
   }
   // Doublets with one station skipped
-  maxDist         = 0.0f;
-  maxDistIndex    = 0;
-  iStaM = iStaL + 2;
+  maxDist      = 0.0f;
+  maxDistIndex = 25;
+  iStaM        = iStaL + 2;
   // Find closest hits (upto kNNOrder_Jump) which satisfy slope condition
   iHitStart = fIndexFirstHitStation[iStaM];      // start index
   iHitEnd   = fIndexFirstHitStation[iStaM + 1];  // end index
@@ -246,13 +246,17 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Oth
     }
   }  // hits on iStaM
 
+
   fNNeighbours[iGThread] = neighCount;
+
+  // printf("iGThread: %d, fNNeighbours: %d \n", iGThread, fNNeighbours[iGThread]);
+
 }  // NearestNeighbours_Other
 
 XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_FastPrim(MakeTripletsOT_FastPrim::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  if (iGThread >= fIterationData[0].fNHits) return;
+  if (iGThread >= fNHits) return;
 
   // printf ("iGThread: %d \t", iGThread);
 
@@ -319,7 +323,7 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_FastPrim(MakeTripletsOT_FastPr
 XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::context& ctx, const int iteration) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-  if (iGThread >= fIterationData[0].fNHits) return;
+  if (iGThread >= fNHits) return;
 
   // printf ("iGThread: %d \t", iGThread);
 
@@ -464,16 +468,18 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::co
     }
   }
   fNTriplets[iGThread] = tripletCount;
+
+  // printf("iGThread: %d, fNTriplets: %d \n", iGThread, fNTriplets[iGThread]);
 }
 
 XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim::context& ctx) const
 {
   const int iGThread       = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   const int NMaxTripletHit = kNN_FastPrim * kNN_FastPrim;
-  if (iGThread >= fIterationData[0].fNHits * NMaxTripletHit) return;
+  if (iGThread >= fNHits * NMaxTripletHit) return;
 
   const unsigned int iHitL = iGThread / NMaxTripletHit;
-  if (iHitL >= fIterationData[0].fNHits) return;
+  if (iHitL >= fNHits) return;
   const int lSta = fvHits[iHitL].Station();
   if (lSta > 9) return;
   const unsigned int nTripletsHitL = fNTriplets[iHitL];
@@ -486,7 +492,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim
                                                fTriplets_FastPrim[iHitL][iTriplet][1]};
 
   for (int i = 0; i < 3; i++) {
-    if (triplet[i] >= fIterationData[0].fNHits) return;
+    if (triplet[i] >= fNHits) return;
   }
   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
@@ -810,12 +816,14 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim
 
 XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::context& ctx) const
 {
-  const int iGThread       = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+  // printf("iGThread: %d\n", iGThread);
+
   const int NMaxTripletHit = kNN_Other * kNN_Other;
-  if (iGThread >= fIterationData[0].fNHits * NMaxTripletHit) return;
+  if (iGThread >= fNHits * NMaxTripletHit) return;
 
   const unsigned int iHitL = iGThread / NMaxTripletHit;
-  if (iHitL >= fIterationData[0].fNHits) return;
+  if (iHitL >= fNHits) return;
   const int lSta = fvHits[iHitL].Station();
   if (lSta > 9) return;
   const unsigned int nTripletsHitL = fNTriplets[iHitL];
@@ -828,7 +836,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
                                                fTriplets_Other[iHitL][iTriplet][1]};
 
   for (int i = 0; i < 3; i++) {
-    if (triplet[i] >= fIterationData[0].fNHits) return;
+    if (triplet[i] >= fNHits) return;
   }
   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
 
@@ -1088,8 +1096,8 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
       };
 
       fld.Set(B[0], sta[0]->fZ, B[1], sta[1]->fZ, B[2], sta[2]->fZ);
-      fldTarget.Set(fParams[fIterationData[0].fIteration].targB,
-                    fParams[fIterationData[0].fIteration].GetTargetPositionZ(), B[0], sta[0]->fZ, B[1], sta[1]->fZ);
+      fldTarget.Set(fParams[fIteration].targB, fParams[fIteration].GetTargetPositionZ(), B[0], sta[0]->fZ, B[1],
+                    sta[1]->fZ);
 
       // Ideally, use global field here; for now use the last used field window 'fld'.
       // If global field is available, replace with fldFull.
@@ -1267,7 +1275,7 @@ XPU_D void GnnGpuGraphConstructor::ExclusiveScan(ExclusiveScan::context& ctx) co
 {
   // const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
 
-  // const int nHits = fIterationData[0].fNHits;
+  // const int nHits = fNHits;
   // if (iGThread >= nHits) return;
 
   // const int tIdx = ctx.thread_idx_x();
@@ -1329,7 +1337,7 @@ XPU_D void GnnGpuGraphConstructor::AddOffsets(AddOffsets::context& ctx) const
 {
   // const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
 
-  // const int nHits = fIterationData[0].fNHits;
+  // const int nHits = fNHits;
   // if (iGThread >= nHits) return;
 
   // const int bIdx = ctx.block_idx_x();
@@ -1343,7 +1351,7 @@ XPU_D void GnnGpuGraphConstructor::CompressAllTripletsOrdered(CompressAllTriplet
 {
   // const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
 
-  // const int nHits = fIterationData[0].fNHits;
+  // const int nHits = fNHits;
   // if (iGThread >= nHits) return;
 
   // const unsigned int count  = fNTriplets[iGThread];

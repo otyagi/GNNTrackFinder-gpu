@@ -595,8 +595,6 @@ namespace cbm::algo::ca
 
     /// go over every tracklet and see if it can be extended with overlapping triplet
     for (int iTracklet = 0; iTracklet < (int) tracklets.size(); ++iTracklet) {
-      // for (int iTracklet = 0; iTracklet < numTriplets; ++iTracklet) {
-
       const auto& tracklet = tracklets[iTracklet];
       int length           = tracklet.size();
       int middleSta        = frWData.Hit(tracklet[length - 2]).Station();
@@ -690,7 +688,7 @@ namespace cbm::algo::ca
     LOG(info) << "Num tracks constructed: " << tracklets.size();
 
     const int min_length = 4;
-    // for iter 1. No fitting
+    // for iter 1 and 2. No fitting
     if (GNNIteration == 0 || GNNIteration == 1) {
       // min length condition
       for (int itracklet = 0; itracklet < (int) tracklets.size(); itracklet++) {

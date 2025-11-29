@@ -36,6 +36,8 @@ ca:
       # The iterations themselves are defined in the ca/possible_iterations branch.
       # iteration_sequence: ['FastPrim', 'AllPrim', 'AllPrimJump', 'AllSec']
       iteration_sequence: ['FastPrim', 'AllPrim']
+      # iteration_sequence: ['FastPrim']
+
       
       # Flag to suppress ghost tracks (true/false)
       is_ghost_suppression: true

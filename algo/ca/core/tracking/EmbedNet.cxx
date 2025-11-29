@@ -900,11 +900,7 @@ void EmbedNet::saveModel(std::string& fNameWeights, std::string& fNameBiases)
 // loads weights and biases from file into the network
 void EmbedNet::loadModel(std::string& fNameWeights, std::string& fNameBiases)
 {
-
   std::ifstream fin;
-
-  // requires the weight and bias matrices to be initialized correctly(correct topology)
-  // TO DO: change such that the network is initialized from the file
 
   // load weight
   fin.open(fNameWeights);

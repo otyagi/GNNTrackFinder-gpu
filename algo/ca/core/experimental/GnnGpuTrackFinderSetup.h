@@ -10,8 +10,10 @@
 #include "CaGpuParameters.h"
 #include "CaGpuTimeMonitor.h"
 #include "CaHit.h"
+#include "CaTrackFitter.h"
 #include "CaVector.h"
 #include "CaWindowData.h"
+#include "CandClassifier.h"
 #include "EmbedNet.h"
 #include "GnnGpuGraphConstructor.h"
 #include "KfTrackParam.h"
@@ -27,7 +29,8 @@ namespace cbm::algo::ca
 
     /// Constructor
     /// \param nThreads  Number of threads for multi-threaded mode
-    GnnGpuTrackFinderSetup(ca::WindowData& wData, const ca::Parameters<fvec>& pars);
+    GnnGpuTrackFinderSetup(ca::WindowData& wData, const ca::Parameters<fvec>& pars, const ca::InputData& input,
+                           TrackFitter& trackFitter);
 
     /// Copy constructor
     GnnGpuTrackFinderSetup(const GnnGpuTrackFinderSetup&) = delete;
@@ -76,6 +79,9 @@ namespace cbm::algo::ca
     /// Save triplets as tracks for debugging after KF fitting
     void SaveFittedTripletsAsTracks();
 
+    void FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
+                      std::vector<std::vector<float>>& trackletFitParams);
+
     void FindTracksCpu(const int iteration, const bool doCompetition);
 
     /// Get the number of triplets
@@ -89,13 +95,18 @@ namespace cbm::algo::ca
     WindowData& frWData;                           ///< Reference to the window data
     xpu::queue fQueue;                             ///< GPU queue TODO: initialization is ~220 ms. Why and how to avoid?
     ca::GnnGpuGraphConstructor fGraphConstructor;  ///< GPU graph constructor
-    unsigned int fIteration;                       ///< Iteration number
-    
-    int fNHits;                                    ///< Number of active hits
-    std::vector<ca::Hit> activeHits;                 ///< active hits in this iteration
-    std::vector<unsigned int> activeToWDataMapping;  ///< index of activeHit in window data
+    TrackFitter& frTrackFitter;
+    const ca::InputData& frInput;
+    unsigned int fIteration;  ///< Iteration number
+
+    int fNHits;                             ///< Number of active hits
+    std::vector<ca::Hit> activeHits;        ///< active hits in this iteration
+    std::vector<int> activeToWDataMapping;  ///< index of activeHit in window data
 
     int fNTriplets;  ///< Number of triplets
+
+    const bool useCandClassifier_        = true;
+    const float CandClassifierThreshold_ = 0.5;
 
     XpuTimings fEventTimeMonitor;
   };

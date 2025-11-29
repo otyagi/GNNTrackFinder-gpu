@@ -65,7 +65,7 @@ namespace cbm::algo::ca
     using block_size = xpu::block_size<kEmbedHitsBlockSize>;
     using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
     using context    = xpu::kernel_context<xpu::no_smem, constants>;  // shared memory argument required
-    XPU_D void operator()(context& ctx, int);
+    XPU_D void operator()(context& ctx);
   };
 
   struct MakeTripletsOT_FastPrim : xpu::kernel<GPUReco> {
@@ -152,7 +152,7 @@ namespace cbm::algo::ca
 
     XPU_D void NearestNeighbours_FastPrim(NearestNeighbours_FastPrim::context&) const;
 
-    XPU_D void NearestNeighbours_Other(NearestNeighbours_Other::context&, const int iteration) const;
+    XPU_D void NearestNeighbours_Other(NearestNeighbours_Other::context&) const;
 
     XPU_D void MakeTripletsOT_FastPrim(MakeTripletsOT_FastPrim::context&) const;
 
@@ -211,6 +211,8 @@ namespace cbm::algo::ca
 
     int fIteration;
 
+    int fNHits;
+
     GpuParameters fParams_const[4];
 
     ca::GpuStation fStations_const[constants::gpu::MaxNofStations];
@@ -223,7 +225,7 @@ namespace cbm::algo::ca
     xpu::buffer<GnnGpuEmbedNet> fEmbedParameters;
 
     // Doublets
-    xpu::buffer<unsigned int> fNNeighbours;  // num doublets for each hit, max kNNOrder
+    xpu::buffer<int> fNNeighbours;  // num doublets for each hit, max kNNOrder
 
     // FastPrim
     constexpr static const int kNN_FastPrim = 20;
@@ -231,9 +233,9 @@ namespace cbm::algo::ca
       fDoublets_FastPrim;  // neighbours of every hit from kNN. Hit index in fvHits
 
     // Other
-    constexpr static const float margin_allPrim = 5.0; // def - 5
-    constexpr static const float margin_allSec = 100.0; // def - 100
-    constexpr static const int kNN_Other = 25 + 10;
+    constexpr static const float margin_allPrim = 5.0;    // def - 5
+    constexpr static const float margin_allSec  = 100.0;  // def - 100
+    constexpr static const int kNN_Other        = 25 + 10;
     xpu::buffer<std::array<unsigned int, kNN_Other>> fDoublets_Other;
 
     // triplet construction
@@ -250,7 +252,8 @@ namespace cbm::algo::ca
     // FastPrim
     xpu::buffer<std::array<bool, kNN_FastPrim * kNN_FastPrim>>
       fTripletsSelected_FastPrim;  // true where triplet passed KF fit check
-    xpu::buffer<std::array<std::array<float, 7>, kNN_FastPrim * kNN_FastPrim>> fvTripletParams_FastPrim;  ///< Triplet parameters
+    xpu::buffer<std::array<std::array<float, 7>, kNN_FastPrim * kNN_FastPrim>>
+      fvTripletParams_FastPrim;  ///< Triplet parameters
 
     // AllPrim
     xpu::buffer<std::array<bool, kNN_Other * kNN_Other>> fTripletsSelected_Other;
