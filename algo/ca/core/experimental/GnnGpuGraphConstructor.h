@@ -31,7 +31,7 @@ namespace cbm::algo
     kSingletConstructorBlockSize      = 512,
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
-    kEmbedHitsBlockSize   = 64,
+    kEmbedHitsBlockSize   = 64, // 64
     kScanBlockSize        = 1024,
     kCompressionBlockSize = 64,
 #endif

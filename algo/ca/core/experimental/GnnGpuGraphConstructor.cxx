@@ -157,9 +157,11 @@ XPU_D void GnnGpuGraphConstructor::NearestNeighbours_Other(NearestNeighbours_Oth
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= fNHits) return;
 
-  float margin = 2.0f;
-  if (fIteration == 1) margin = margin_allPrim;
-  if (fIteration == 3) margin = margin_allSec;
+  float margin = 5.0f;
+  if (fIteration == 1)
+    margin = margin_allPrim;
+  else if (fIteration == 3)
+    margin = margin_allSec;
 
   auto& neighbours   = fDoublets_Other[iGThread];
   int neighCount     = 0;
@@ -258,12 +260,9 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_FastPrim(MakeTripletsOT_FastPr
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= fNHits) return;
 
-  // printf ("iGThread: %d \t", iGThread);
-
   unsigned int tripletCount = 0;
-
-  const float YZCut = 0.1;  // (radians) def - 0.1 from distributions
-  const float XZCut = 0.1;  // def - 0.1 from distributions
+  const float YZCut         = 0.1;  // (radians) def - 0.1 from distributions
+  const float XZCut         = 0.1;  // def - 0.1 from distributions
 
   auto& tripletsLHit       = fTriplets_FastPrim[iGThread];
   const auto& doubletsLHit = fDoublets_FastPrim[iGThread];
@@ -318,6 +317,7 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_FastPrim(MakeTripletsOT_FastPr
     }
   }
   fNTriplets[iGThread] = tripletCount;
+  // printf ("iGThread: %d, fNTriplets: %d", iGThread, fNTriplets[iGThread]);
 }
 
 XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::context& ctx, const int iteration) const
@@ -417,8 +417,8 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::co
               tripletsLHit[tripletCount++] = std::array<unsigned int, 2>{iHitM, iHitR};
             }
           }
+          break;  // only one match possible
         }
-        break;  // only one match possible
       }  // iHitM
     }
     else if ((sta2 - sta1) == 2) {  // triplet type : [1 3 4]
@@ -462,8 +462,8 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::co
               tripletsLHit[tripletCount++] = std::array<unsigned int, 2>{iHitM, iHitR};
             }
           }
+          break;  // only one match possible
         }
-        break;  // only one match possible
       }  // iHitM
     }
   }

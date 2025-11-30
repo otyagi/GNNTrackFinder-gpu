@@ -200,7 +200,7 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   float embedHitsBlocks = std::ceil((float) activeHits.size() / GnnGpuConstants::kEmbedHitsBlockSize);
 
   fGraphConstructor.fIteration = fIteration;
-  fGraphConstructor.fNHits = fNHits;
+  fGraphConstructor.fNHits     = fNHits;
 
   xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
 
@@ -884,7 +884,7 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCom
     LOG(info) << "No tracks found in iteration: " << iteration;
     return;
   }
-  
+
   for (const auto& [track, _] : trackAndScores) {
     for (const auto& iHit : track) {
       const ca::Hit& hit = frWData.Hit(iHit);
@@ -973,7 +973,6 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
     }
   }
   const int NHits = activeHits.size();
-  LOG(info) << "Active hits: " << NHits;
 
   fGraphConstructor.fvHits.reset(NHits, xpu::buf_io);
   xpu::h_view vfvHits{fGraphConstructor.fvHits};
@@ -1054,17 +1053,17 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
 
   // Setup buffers
   fGraphConstructor.fNNeighbours.reset(NHits, xpu::buf_io);
-  fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
-  xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
+  // fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
+  // xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
 
-  LOG(info) << "[SetupGNN] fNNeighbours size: " << vfNNeighbours.size();
+  // LOG(info) << "[SetupGNN] fNNeighbours size: " << vfNNeighbours.size();
   // why garbage number even after reset?
-  LOG(info) << "[SetupGNN] fNNeighbours at reset: " << std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
+  // LOG(info) << "[SetupGNN] fNNeighbours at reset: " << std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
 
   fGraphConstructor.fNTriplets.reset(NHits, xpu::buf_io);
-  fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
-  xpu::h_view vfNTriplets(fGraphConstructor.fNTriplets);
-  LOG(info) << "[SetupGNN] NTriplets at reset: " << std::accumulate(vfNTriplets.begin(), vfNTriplets.end(), 0);
+  // fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
+  // xpu::h_view vfNTriplets(fGraphConstructor.fNTriplets);
+  // LOG(info) << "[SetupGNN] NTriplets at reset: " << std::accumulate(vfNTriplets.begin(), vfNTriplets.end(), 0);
 
 
   if (iteration == 0) {
@@ -1096,9 +1095,13 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
     }
     iHit++;
   }
-  for (int iSta = lastSta; iSta <= nStations; iSta++)
+  for (int iSta = lastSta + 1; iSta <= nStations; iSta++)
     fvIndexFirstHitStation[iSta] = iHit;
   fQueue.copy(fGraphConstructor.fIndexFirstHitStation, xpu::h2d);
+
+  for (int iSta = 0; iSta <= nStations; iSta++) {
+    LOG(info) << "First hit index on station " << iSta << ": " << fvIndexFirstHitStation[iSta];
+  }
 
   /// Flatten triplets
   // fGraphConstructor.fOffsets.reset(NHits, xpu::buf_device);

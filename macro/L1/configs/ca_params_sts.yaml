@@ -34,8 +34,8 @@ ca:
     track_finder:
       # Iteration sequence
       # The iterations themselves are defined in the ca/possible_iterations branch.
-      # iteration_sequence: ['FastPrim', 'AllPrim', 'AllPrimJump', 'AllSec']
-      iteration_sequence: ['FastPrim', 'AllPrim']
+      iteration_sequence: ['FastPrim', 'AllPrim', 'AllPrimJump', 'AllSec']
+      # iteration_sequence: ['FastPrim', 'AllPrim']
       # iteration_sequence: ['FastPrim']
 
       

@@ -250,19 +250,19 @@ namespace cbm::algo::ca
     }
 
     // Fit tracks
-    // frMonitorData.StartTimer(ETimer::FitTracks);
-    // fTrackFitter.FitCaTracks(input, wData);
-    // frMonitorData.StopTimer(ETimer::FitTracks);
+    frMonitorData.StartTimer(ETimer::FitTracks);
+    fTrackFitter.FitCaTracks(input, wData);
+    frMonitorData.StopTimer(ETimer::FitTracks);
 
-    // // Merge clones
-    // frMonitorData.StartTimer(ETimer::MergeClones);
-    // fCloneMerger.Exec(input, wData);
-    // frMonitorData.StopTimer(ETimer::MergeClones);
+    // Merge clones
+    frMonitorData.StartTimer(ETimer::MergeClones);
+    fCloneMerger.Exec(input, wData);
+    frMonitorData.StopTimer(ETimer::MergeClones);
 
-    // // Fit tracks
-    // frMonitorData.StartTimer(ETimer::FitTracks);
-    // fTrackFitter.FitCaTracks(input, wData);
-    // frMonitorData.StopTimer(ETimer::FitTracks);
+    // Fit tracks
+    frMonitorData.StartTimer(ETimer::FitTracks);
+    fTrackFitter.FitCaTracks(input, wData);
+    frMonitorData.StopTimer(ETimer::FitTracks);
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1010,11 +1010,13 @@ namespace cbm::algo::ca
       GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);
     }
     else if (iteration == 1) {
-      // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks(); 
+      // GnnGpuTrackFinderSetup.SaveDoubletsAsTracks();
+      // GnnGpuTrackFinderSetup.SaveTripletsAsTracks();
+      // GnnGpuTrackFinderSetup.SaveFittedTripletsAsTracks();
       GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);
     }
-    else if (iteration == 3){
-
+    else if (iteration == 3) {
+      GnnGpuTrackFinderSetup.FindTracksCpu(iteration, true);
     }
   }
 
@@ -1028,7 +1030,7 @@ namespace cbm::algo::ca
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
       case 0: graphConstructor.FindFastPrim(2); break;
-      case 1: graphConstructor.FindSlowPrimJump(2); break;
+      case 1: graphConstructor.FindSlowPrimJump(0); break;
       case 2: return;
       case 3: graphConstructor.FindAllSecJump(2); break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;
