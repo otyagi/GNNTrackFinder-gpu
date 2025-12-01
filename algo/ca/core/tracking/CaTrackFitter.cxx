@@ -451,7 +451,6 @@ namespace cbm::algo::ca
     fvec x_first;
     fvec y_first;
     kf::MeasurementXy<fvec> mxy_first;
-
     fvec time_first;
     fvec wtime_first;
     fvec dt2_first;
@@ -459,7 +458,6 @@ namespace cbm::algo::ca
     fvec x_last;
     fvec y_last;
     kf::MeasurementXy<fvec> mxy_last;
-
     fvec time_last;
     fvec wtime_last;
     fvec dt2_last;
@@ -742,16 +740,13 @@ namespace cbm::algo::ca
 
         tr.ResetErrors(mxy_first.Dx2(), mxy_first.Dy2(), 0.1, 0.1, 1., dt2_first, 1.e-2);
         tr.C10() = mxy_first.Dxy();
-
         tr.X()    = mxy_first.X();
         tr.Y()    = mxy_first.Y();
         tr.Time() = time_first;
         tr.Vi()   = constants::phys::SpeedOfLightInv;
         tr.InitVelocityRange(0.5);
-
         tr.Ndf()     = fvec(-5. + 2.);
         tr.NdfTime() = fvec(-2.) + wtime_first;
-
         fit.SetQp0(tr.Qp());
 
         fldZ1 = z[ista];

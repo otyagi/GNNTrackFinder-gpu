@@ -55,6 +55,15 @@ namespace cbm::algo::ca
       //     float e = 1.e-4;
       return (x * x + y * y + z * z <= 1.e-8);
     }
+
+    /// Gets the x-component of the field
+    XPU_D float GetBx() const { return x; }
+
+    /// Gets the y-component of the field
+    XPU_D float GetBy() const { return y; }
+
+    /// Gets the z-component of the field
+    XPU_D float GetBz() const { return z; }
   };
 
   class GpuFieldSlice {

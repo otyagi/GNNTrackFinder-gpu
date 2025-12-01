@@ -116,7 +116,7 @@ namespace cbm::algo::ca::constants
     constexpr bool GpuSortTriplets       = false;  ///< Flag: use GPU for sorting triplets
     constexpr bool CpuSortTriplets       = true;   ///< Flag: use CPU for sorting triplets
     constexpr bool GnnTracking           = true;   ///< Flag: use GNN for tracking
-    constexpr bool GnnGpuTracking        = true;   ///< Flag: use GPU GNN for tracking
+    constexpr bool GnnGpuTracking        = true;  ///< Flag: use GPU GNN for tracking
   }  // namespace gpu
 
   /// \brief Undefined values

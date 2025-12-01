@@ -665,7 +665,7 @@ namespace cbm::algo::kf
       fTr.Qp()   = r[4];
       fTr.Time() = r[5];
       fTr.Vi()   = r[6];
-      fTr.Z() = zMasked;
+      fTr.Z()    = zMasked;
 
       //          covariance matrix transport
       DataT C[7][7];
@@ -922,7 +922,7 @@ namespace cbm::algo::kf
     /// \param hitWtime - hit weight for the time measurement
     /// \param NHits - number of hits
     XPU_D void GuessTrack(const DataT& trackZ, const DataT hitX[], const DataT hitY[], const DataT hitZ[],
-                          const DataT hitT[], const DataT By[], const DataTmask hitW[], const DataTmask hitWtime[],
+                          const DataT hitT[], const DataT By[] /*, const DataTmask hitW[], const DataTmask hitWtime[]*/,
                           int NHits)
     {
       // gives nice initial approximation for x,y,tx,ty - almost same as KF fit. qp - is shifted by 4%, resid_ual - ~3.5% (KF fit resid_ual - 1%).
@@ -941,11 +941,11 @@ namespace cbm::algo::kf
 
       for (int i = 0; i < NHits; i++) {
 
-        DataT w = iif_mask(hitW[i], DataT(1.), DataT(0.));
+        DataT w = DataT(1.);  //iif_mask(hitW[i], DataT(1.), DataT(0.));
 
-        DataTmask setTime = (!isTimeSet) && hitWtime[i] && hitW[i];
-        time              = iif_mask(setTime, hitT[i], time);
-        isTimeSet         = isTimeSet || setTime;
+        DataTmask setTime = true;     //(!isTimeSet) && hitWtime[i] && hitW[i];
+        time              = hitT[i];  //iif_mask(setTime, hitT[i], time);
+        isTimeSet         = true;     //isTimeSet || setTime;
 
         DataT x = hitX[i];
         DataT y = hitY[i];
@@ -955,7 +955,7 @@ namespace cbm::algo::kf
           DataT dZ = z - prevZ;
           Sy += w * dZ * sy + DataT(0.5) * dZ * dZ * By[i];
           sy += w * dZ * By[i];
-          prevZ = iif_mask(hitW[i], z, prevZ);
+          prevZ = z;  //iif_mask(hitW[i], z, prevZ);
         }
 
         DataT S = Sy;
@@ -1048,6 +1048,7 @@ namespace cbm::algo::kf
       fTr.Vi()   = kf::defs::SpeedOfLightInv<DataT>;
       fQp0       = fTr.Qp();
     }
+
 
    private:
     typedef const DataT cnst;

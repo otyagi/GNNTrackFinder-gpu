@@ -1099,9 +1099,9 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
     fvIndexFirstHitStation[iSta] = iHit;
   fQueue.copy(fGraphConstructor.fIndexFirstHitStation, xpu::h2d);
 
-  for (int iSta = 0; iSta <= nStations; iSta++) {
-    LOG(info) << "First hit index on station " << iSta << ": " << fvIndexFirstHitStation[iSta];
-  }
+  // for (int iSta = 0; iSta <= nStations; iSta++) {
+  //   LOG(info) << "First hit index on station " << iSta << ": " << fvIndexFirstHitStation[iSta];
+  // }
 
   /// Flatten triplets
   // fGraphConstructor.fOffsets.reset(NHits, xpu::buf_device);
