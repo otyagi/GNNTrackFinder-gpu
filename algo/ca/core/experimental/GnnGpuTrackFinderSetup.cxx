@@ -318,11 +318,9 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
   }
 
-
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
     fEventTimeMonitor.FitTripletsOT_time[fIteration] = step_time;
-    LOG(info) << "FitTripletsOT_time: " << step_time.wall();
     xpu::push_timer("ConstructCandidates_time");
   }
 
@@ -364,6 +362,20 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     fQueue.copy(fGraphConstructor.fTriplets_Other, xpu::d2h);
     fQueue.copy(fGraphConstructor.fTripletsSelected_Other, xpu::d2h);
     fQueue.copy(fGraphConstructor.fvTripletParams_Other, xpu::d2h);
+  }
+
+  // Debugging
+  // SaveDoubletsAsTracks();
+  // SaveTripletsAsTracks();
+  // SaveFittedTripletsAsTracks();
+  if (fIteration == 0) {
+    FindTracks(fIteration, true);
+  }
+  else if (fIteration == 1) {
+    FindTracks(fIteration, true);
+  }
+  else if (fIteration == 3) {
+    FindTracks(fIteration, true);
   }
 }
 
@@ -465,7 +477,7 @@ void GnnGpuTrackFinderSetup::SaveFittedTripletsAsTracks()
   LOG(info) << "Num triplets as tracks (after fitting): " << nTriplets;
 }
 
-void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCompetition)
+void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompetition)
 {
   std::vector<std::vector<int>> tracklets;
   tracklets.reserve(10000000);
@@ -776,102 +788,8 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCom
   }
 
   if (doCompetition) {  // do track competition
-
-    /// sort tracks by length and lower scores (chi2) first
-    std::sort(trackAndScores.begin(), trackAndScores.end(),
-              [](const std::pair<std::vector<int>, float>& a, const std::pair<std::vector<int>, float>& b) {
-                if (a.first.size() == b.first.size()) {
-                  return a.second < b.second;
-                }
-                return a.first.size() > b.first.size();
-              });
-    LOG(info) << "Tracks sorted.";
-
-    /// cooperative/altruistic competition
-    for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
-      /// check that all hits are not used
-      auto& track    = trackAndScores[iTrack].first;
-      bool remove    = false;
-      uint nUsedHits = 0;
-      std::vector<int> usedHitIDs;
-      std::vector<int> usedHitIndexesInTrack;
-      for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
-        const ca::Hit& hit = frWData.Hit(track[iHit]);
-        if (frWData.IsHitKeyUsed(hit.FrontKey()) || frWData.IsHitKeyUsed(hit.BackKey())) {
-          nUsedHits++;
-          usedHitIDs.push_back(track[iHit]);
-          usedHitIndexesInTrack.push_back(iHit);
-        }
-      }
-      if (nUsedHits == 0) {  // clean tracks
-        /// mark all hits as used
-        for (const auto& hit : track) {
-          frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
-          frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
-        }
-        continue;  // go next track
-      }
-      else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
-        if (track.size() - nUsedHits >= 4) {
-          // remove used hits.
-          // read usedHitIndexes in reverse order
-          std::sort(usedHitIndexesInTrack.begin(), usedHitIndexesInTrack.end(), std::greater<int>());
-          for (const auto usedHitIndex : usedHitIndexesInTrack) {
-            track.erase(track.begin() + usedHitIndex);
-          }
-          // mark remaining hits as used
-          for (const auto& hit : track) {
-            frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
-            frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
-          }
-          continue;  // go next track
-        }
-        else {
-          remove = true;  // remove track if begging not successful
-        }
-      }
-
-      if (remove
-          && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
-        for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
-          if (trackAndScores[iBeg].first.size() <= trackAndScores[iTrack].first.size())
-            continue;                                        // only beg from longer tracks
-          if (trackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
-          if (trackAndScores[iBeg].second < trackAndScores[iTrack].second)
-            continue;  // dont donate to higher chi2 beggar
-
-          auto& begTrack = trackAndScores[iBeg].first;
-          for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
-            const auto begHit = begTrack[iBegHit];
-            if (begHit == usedHitIDs[0]) continue;  // dont let exact hit be borrowed.
-            if (frWData.Hit(begHit).FrontKey() == frWData.Hit(usedHitIDs[0]).FrontKey()
-                || frWData.Hit(begHit).BackKey()
-                     == frWData.Hit(usedHitIDs[0]).BackKey()) {  // only one track will match
-              // remove iBegHit from begTrack
-              begTrack.erase(begTrack.begin() + iBegHit);
-              // reset hit flags. Will be reset by beggar
-              frWData.IsHitKeyUsed(frWData.Hit(begHit).FrontKey()) = 0;
-              frWData.IsHitKeyUsed(frWData.Hit(begHit).BackKey())  = 0;
-
-              remove = false;
-              break;
-            }
-          }
-        }
-      }
-
-      if (remove) {
-        trackAndScores.erase(trackAndScores.begin() + iTrack);
-        iTrack--;
-        continue;
-      }
-      /// mark all hits as used
-      for (const auto& hit : track) {
-        frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
-        frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
-      }
-    }
-
+    // CooperativeCompetitionCPU(trackAndScores);
+    CooperativeCompetitionGPU(trackAndScores);
   }  // track competition
 
   if (iteration == 0) {
@@ -887,8 +805,7 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCom
 
   for (const auto& [track, _] : trackAndScores) {
     for (const auto& iHit : track) {
-      const ca::Hit& hit = frWData.Hit(iHit);
-      // used strips are marked
+      const ca::Hit& hit                   = frWData.Hit(iHit);
       frWData.IsHitKeyUsed(hit.FrontKey()) = 1;
       frWData.IsHitKeyUsed(hit.BackKey())  = 1;
       frWData.RecoHitIndices().push_back(hit.Id());
@@ -898,9 +815,209 @@ void GnnGpuTrackFinderSetup::FindTracksCpu(const int iteration, const bool doCom
     frWData.RecoTracks().push_back(t);
   }
 
-  LOG(info) << "FindTracksCPU(): Num tracks after competition: " << trackAndScores.size();
+  LOG(info) << "FindTracks(): Num tracks after competition: " << trackAndScores.size();
 
   LOG(info) << "Total tracks found in event: " << frWData.RecoTracks().size();
+}
+
+void GnnGpuTrackFinderSetup::CooperativeCompetitionCPU(std::vector<std::pair<std::vector<int>, float>>& trackAndScores)
+{
+  /// sort tracks by length and lower scores (chi2) first
+  std::sort(trackAndScores.begin(), trackAndScores.end(),
+            [](const std::pair<std::vector<int>, float>& a, const std::pair<std::vector<int>, float>& b) {
+              if (a.first.size() == b.first.size()) {
+                return a.second < b.second;
+              }
+              return a.first.size() > b.first.size();
+            });
+  LOG(info) << "Tracks sorted.";
+
+  for (std::size_t iTrack = 0; iTrack < trackAndScores.size(); iTrack++) {
+    // check that all hits are not used
+    auto& track    = trackAndScores[iTrack].first;
+    bool remove    = false;
+    uint nUsedHits = 0;
+    std::vector<int> usedHitIDs;
+    std::vector<int> usedHitIndexesInTrack;
+    for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
+      const ca::Hit& hit = frWData.Hit(track[iHit]);
+      if (frWData.IsHitKeyUsed(hit.FrontKey()) || frWData.IsHitKeyUsed(hit.BackKey())) {
+        nUsedHits++;
+        usedHitIDs.push_back(track[iHit]);
+        usedHitIndexesInTrack.push_back(iHit);
+      }
+    }
+    if (nUsedHits == 0) {  // clean tracks
+      /// mark all hits as used
+      for (const auto& hit : track) {
+        frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+        frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+      }
+      continue;
+    }
+    else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
+      if (track.size() - nUsedHits >= 4) {
+        // remove used hits.
+        // read usedHitIndexes in reverse order
+        std::sort(usedHitIndexesInTrack.begin(), usedHitIndexesInTrack.end(), std::greater<int>());
+        for (const auto usedHitIndex : usedHitIndexesInTrack) {
+          track.erase(track.begin() + usedHitIndex);
+        }
+        // mark remaining hits as used
+        for (const auto& hit : track) {
+          frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+          frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+        }
+        continue;
+      }
+      else {
+        remove = true;  // remove track if begging not successful
+      }
+    }
+
+    if (remove
+        && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
+      for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
+        if (trackAndScores[iBeg].first.size() <= trackAndScores[iTrack].first.size())
+          continue;                                        // only beg from longer tracks
+        if (trackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
+        if (trackAndScores[iBeg].second < trackAndScores[iTrack].second) continue;  // dont donate to higher chi2 beggar
+
+        auto& begTrack = trackAndScores[iBeg].first;
+        for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
+          const auto begHit = begTrack[iBegHit];
+          if (begHit == usedHitIDs[0]) continue;  // dont let exact hit be borrowed.
+          if (frWData.Hit(begHit).FrontKey() == frWData.Hit(usedHitIDs[0]).FrontKey()
+              || frWData.Hit(begHit).BackKey() == frWData.Hit(usedHitIDs[0]).BackKey()) {  // only one track will match
+            // remove iBegHit from begTrack
+            begTrack.erase(begTrack.begin() + iBegHit);
+            // reset hit flags. Will be reset by beggar
+            frWData.IsHitKeyUsed(frWData.Hit(begHit).FrontKey()) = 0;
+            frWData.IsHitKeyUsed(frWData.Hit(begHit).BackKey())  = 0;
+
+            remove = false;
+            break;
+          }
+        }
+      }
+    }
+
+    if (remove) {
+      trackAndScores.erase(trackAndScores.begin() + iTrack);
+      iTrack--;
+      continue;
+    }
+    // mark all hits as used
+    for (const auto& hit : track) {
+      frWData.IsHitKeyUsed(frWData.Hit(hit).FrontKey()) = 1;
+      frWData.IsHitKeyUsed(frWData.Hit(hit).BackKey())  = 1;
+    }
+  }
+}
+
+void GnnGpuTrackFinderSetup::CooperativeCompetitionGPU(std::vector<std::pair<std::vector<int>, float>>& trackAndScores)
+{
+
+  // xpu::device_prop prop{xpu::device::active()};
+
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+
+  /// sort tracks by length and lower scores (chi2) first
+  std::sort(trackAndScores.begin(), trackAndScores.end(),
+            [](const std::pair<std::vector<int>, float>& a, const std::pair<std::vector<int>, float>& b) {
+              if (a.first.size() == b.first.size()) {
+                return a.second < b.second;
+              }
+              return a.first.size() > b.first.size();
+            });
+  // LOG(info) << "Tracks sorted.";
+
+  const int numKeyFlags = frWData.HitKeyFlags().size();
+  LOG(info) << "Num key flags: " << numKeyFlags;
+  fGraphConstructor.fHitKeyFlags.reset(numKeyFlags, xpu::buf_io);
+  xpu::h_view vfHitKeyFlags{fGraphConstructor.fHitKeyFlags};
+  std::copy_n(frWData.HitKeyFlags().begin(), numKeyFlags, &vfHitKeyFlags[0]);
+  fQueue.copy(fGraphConstructor.fHitKeyFlags, xpu::h2d);
+
+  const int numTracks = trackAndScores.size();
+  if (numTracks == 0) return;
+  fGraphConstructor.fNTracks = numTracks;
+  fGraphConstructor.fSelectedTrackIndexes.reset(numTracks, xpu::buf_io);
+  fGraphConstructor.fTrackAndScores.reset(numTracks, xpu::buf_io);
+  fGraphConstructor.fTrackNumHits.reset(numTracks, xpu::buf_io);
+  {
+    xpu::h_view vfSelectedTrackIndexes(fGraphConstructor.fSelectedTrackIndexes);
+    xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
+    xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
+    for (int iTrack = 0; iTrack < numTracks; iTrack++) {
+      std::array<int, 12> temp_track;
+      temp_track.fill(-1);
+      const int nHits        = trackAndScores[iTrack].first.size();
+      vfTrackNumHits[iTrack] = nHits;
+      for (int iHit = 0; iHit < nHits; iHit++) {
+        temp_track[iHit] = trackAndScores[iTrack].first[iHit];
+      }
+      vfTrackAndScores[iTrack].first  = temp_track;
+      vfTrackAndScores[iTrack].second = trackAndScores[iTrack].second;
+      vfSelectedTrackIndexes[iTrack]  = 0;
+    }
+    fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::h2d);
+    fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::h2d);
+    fQueue.copy(fGraphConstructor.fSelectedTrackIndexes, xpu::h2d);
+  }
+  LOG(info) << "Data prepared for GPU.";
+
+  fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::d2h);
+  xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
+  for (int i = 0; i < 10; i++) {
+    LOG(info) << "nhits: " << vfTrackNumHits[i];
+  }
+
+  fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::d2h);
+  xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
+  for (int i = 0; i < 10; ++i) {
+    LOG(info) << "track " << i << " chi2: " << vfTrackAndScores[i].second << " hit0: " << vfTrackAndScores[i].first[0];
+  }
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    fEventTimeMonitor.nIterations = fIteration;
+    xpu::push_timer("Competition_time");
+  }
+  fQueue.launch<Competition>(xpu::n_blocks(1));
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                         = xpu::pop_timer();
+    fEventTimeMonitor.Competition_time[fIteration] = step_time;
+  }
+  LOG(info) << "GPU competition done.";
+
+  fQueue.copy(fGraphConstructor.fSelectedTrackIndexes, xpu::d2h);
+  fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::d2h);
+  fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::d2h);
+
+  // copy trackAndScores back to CPU
+  {
+    xpu::h_view vfSelectedTrackIndexes(fGraphConstructor.fSelectedTrackIndexes);
+    xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
+    xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
+    // go over selected tracks and copy to track and scores.
+    trackAndScores.clear();
+    for (int iTrack = 0; iTrack < numTracks; iTrack++) {
+      if (vfSelectedTrackIndexes[iTrack] != 1) continue;
+      const auto& [trackAllStations, score] = vfTrackAndScores[iTrack];
+      const int nHitsInTrack                = vfTrackNumHits[iTrack];
+      if (nHitsInTrack < 4) continue;
+      std::vector<int> track;
+      for (int iHit = 0; iHit < 12; iHit++) {
+        if (trackAllStations[iHit] != -1) track.push_back(trackAllStations[iHit]);
+      }
+      if (track.size() != nHitsInTrack) {
+        LOG(info) << "[CooperativeCompetitionGPU] Warning: Track length";
+        continue;
+      }
+      trackAndScores.push_back(std::make_pair(track, score));
+    }
+  }
+  LOG(info) << "Num tracks found after competition on GPU: " << trackAndScores.size();
 }
 
 void GnnGpuTrackFinderSetup::FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
@@ -973,6 +1090,13 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
     }
   }
   const int NHits = activeHits.size();
+
+  if (iteration == 0) {
+    fGraphConstructor.fvHitsAll.reset(NHits, xpu::buf_io);
+    xpu::h_view vfvHitsAll{fGraphConstructor.fvHitsAll};
+    std::copy_n(activeHits.begin(), NHits, &vfvHitsAll[0]);
+    fQueue.copy(fGraphConstructor.fvHitsAll, xpu::h2d);
+  }
 
   fGraphConstructor.fvHits.reset(NHits, xpu::buf_io);
   xpu::h_view vfvHits{fGraphConstructor.fvHits};
@@ -1057,7 +1181,7 @@ void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)
   // xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
 
   // LOG(info) << "[SetupGNN] fNNeighbours size: " << vfNNeighbours.size();
-  // why garbage number even after reset?
+  // //why garbage number even after reset?
   // LOG(info) << "[SetupGNN] fNNeighbours at reset: " << std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
 
   fGraphConstructor.fNTriplets.reset(NHits, xpu::buf_io);

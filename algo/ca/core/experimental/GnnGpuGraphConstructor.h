@@ -31,7 +31,7 @@ namespace cbm::algo
     kSingletConstructorBlockSize      = 512,
     kSingletConstructorItemsPerThread = 8,
 #else  // HIP, values ignored on CPU
-    kEmbedHitsBlockSize   = 64, // 64
+    kEmbedHitsBlockSize   = 64,  // 64
     kScanBlockSize        = 1024,
     kCompressionBlockSize = 64,
 #endif
@@ -103,6 +103,13 @@ namespace cbm::algo::ca
     XPU_D void operator()(context& ctx);
   };
 
+  struct Competition : xpu::kernel<GPUReco> {
+    using block_size = xpu::block_size<64>;
+    using constants  = xpu::cmem<strGnnGpuGraphConstructor>;
+    using context    = xpu::kernel_context<xpu::no_smem, constants>;
+    XPU_D void operator()(context& ctx);
+  };
+
   struct ExclusiveScan : xpu::kernel<GPUReco> {
     using block_size    = xpu::block_size<kScanBlockSize>;
     using scan_t        = xpu::block_scan<int, kScanBlockSize>;
@@ -135,7 +142,6 @@ namespace cbm::algo::ca
     XPU_D void operator()(context&);
   };
 
-
   struct GnnIterationData {
     int fNHits;              ///< Number of hits in grid
     int fIteration;          ///< Iteration number
@@ -164,6 +170,8 @@ namespace cbm::algo::ca
 
     XPU_D void ConstructCandidates(ConstructCandidates::context&) const;
 
+    XPU_D void Competition(Competition::context&) const;
+
     XPU_D void ExclusiveScan(ExclusiveScan::context&) const;
 
     XPU_D void AddBlockSums(AddBlockSums::context&, int nblocks) const;
@@ -171,6 +179,7 @@ namespace cbm::algo::ca
     XPU_D void AddOffsets(AddOffsets::context&) const;
 
     XPU_D void CompressAllTripletsOrdered(CompressAllTripletsOrdered::context&) const;
+
 
 
    private:
@@ -204,6 +213,8 @@ namespace cbm::algo::ca
     /// It is a portion of fInputData to process in the current time window
     /// hit.Id is replaced by the hit index in fInputData
     xpu::buffer<ca::Hit> fvHits;
+
+    xpu::buffer<ca::Hit> fvHitsAll;  // all hits in event
 
     // xpu::buffer<ca::Triplet> fvTriplets;  ///< Triplets
 
@@ -258,6 +269,13 @@ namespace cbm::algo::ca
     // AllPrim
     xpu::buffer<std::array<bool, kNN_Other * kNN_Other>> fTripletsSelected_Other;
     xpu::buffer<std::array<std::array<float, 7>, kNN_Other * kNN_Other>> fvTripletParams_Other;
+
+    /// Track competition
+    xpu::buffer<std::pair<std::array<int, 12>, float>> fTrackAndScores;  // array of hit indexes and chi2 value
+    xpu::buffer<bool> fSelectedTrackIndexes;                             // 0 - remove, 1 - selected.
+    xpu::buffer<int> fTrackNumHits;           // num hits in each track. -1 is no hit
+    xpu::buffer<unsigned char> fHitKeyFlags;  // from fWindowData::fvbHitKeyFlags
+    int fNTracks;
 
     /// -- TEST --
     /// flatten triplets

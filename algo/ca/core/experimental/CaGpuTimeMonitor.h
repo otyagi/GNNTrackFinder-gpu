@@ -40,6 +40,7 @@ namespace cbm::algo::ca
     xpu::timings CompressTripletsOT_time[4];
     xpu::timings FitTripletsOT_time[4];
     xpu::timings ConstructCandidates_time[4];
+    xpu::timings Competition_time[4];
 
     int nIterations;
 
@@ -75,6 +76,7 @@ namespace cbm::algo::ca
       print_timing("CompressTripletsOT_time", CompressTripletsOT_time[iteration]);
       print_timing("FitTripletsOT_time", FitTripletsOT_time[iteration]);
       print_timing("ConstructCandidates_time", ConstructCandidates_time[iteration]);
+      print_timing("Competition_time", Competition_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
     }
   };

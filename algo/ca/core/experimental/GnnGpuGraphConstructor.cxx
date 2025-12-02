@@ -82,6 +82,9 @@ XPU_D void CompressAllTripletsOrdered::operator()(context& ctx)
   ctx.cmem<strGnnGpuGraphConstructor>().CompressAllTripletsOrdered(ctx);
 }
 
+XPU_EXPORT(Competition);
+XPU_D void Competition::operator()(context& ctx) { ctx.cmem<strGnnGpuGraphConstructor>().Competition(ctx); }
+
 XPU_D void GnnGpuGraphConstructor::EmbedHits(EmbedHits::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
@@ -472,359 +475,6 @@ XPU_D void GnnGpuGraphConstructor::MakeTripletsOT_Other(MakeTripletsOT_Other::co
   // printf("iGThread: %d, fNTriplets: %d \n", iGThread, fNTriplets[iGThread]);
 }
 
-// XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim::context& ctx) const
-// {
-//   const int iGThread       = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
-//   const int NMaxTripletHit = kNN_FastPrim * kNN_FastPrim;
-//   if (iGThread >= fNHits * NMaxTripletHit) return;
-
-//   const unsigned int iHitL = iGThread / NMaxTripletHit;
-//   if (iHitL >= fNHits) return;
-//   const int lSta = fvHits[iHitL].Station();
-//   if (lSta > 9) return;
-//   const unsigned int nTripletsHitL = fNTriplets[iHitL];
-//   const int iTriplet               = iGThread % NMaxTripletHit;
-//   if (iTriplet >= NMaxTripletHit) return;
-//   if (nTripletsHitL > NMaxTripletHit || nTripletsHitL == 0) return;
-//   if (iTriplet >= (int) nTripletsHitL) return;
-
-//   const std::array<unsigned int, 3> triplet = {iHitL, fTriplets_FastPrim[iHitL][iTriplet][0],
-//                                                fTriplets_FastPrim[iHitL][iTriplet][1]};
-
-//   for (int i = 0; i < 3; i++) {
-//     if (triplet[i] >= fNHits) return;
-//   }
-//   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
-
-//   const int nStations = 12;
-
-//   // ----- start fixing here
-//   ca::GpuFieldValue fldB0, fldB1, fldB2;
-//   ca::GpuFieldRegion fld, fld1;
-
-//   kf::GpuTrackKalmanFilter<float> fit;
-//   // kf::TrackParamBase<float>& tr = fit.Tr();
-//   TrackParam<float>& tr = fit.Tr();
-//   fit.SetParticleMass(constants::phys::MuonMass);
-//   fit.SetDoFitVelocity(true);
-
-//   const ca::GpuStation* sta[nStations];
-//   for (int is = 0; is < nStations; ++is) {
-//     sta[is] = &fStations_const[is];
-//   };
-
-//   // Spatial-time position of a hit vs. station and track in the portion
-//   float x[constants::size::MaxNstations];                       // Hit position along the x-axis [cm]
-//   float y[constants::size::MaxNstations];                       // Hit position along the y-axis [cm]
-//   ca::MeasurementXy<float> mxy[constants::size::MaxNstations];  // Covariance matrix for x,y
-//   float z[constants::size::MaxNstations];                       // Hit position along the z-axis (precised) [cm]
-//   float time[constants::size::MaxNstations];                    // Hit time [ns]
-//   float dt2[constants::size::MaxNstations];                     // Hit time uncertainty [ns] squared
-
-//   float x_first;
-//   float y_first;
-//   ca::MeasurementXy<float> mxy_first;
-//   float time_first;
-//   float wtime_first;
-//   float dt2_first;
-
-//   float x_last;
-//   float y_last;
-//   ca::MeasurementXy<float> mxy_last;
-//   float time_last;
-//   float wtime_last;
-//   float dt2_last;
-
-//   float By[constants::size::MaxNstations];
-//   bool w[constants::size::MaxNstations];
-//   bool w_time[constants::size::MaxNstations];  // !!!
-
-//   float fldZ0;
-//   float fldZ1;
-//   float fldZ2;
-//   float z_start;
-//   float z_end;
-
-//   ca::GpuFieldValue fB[constants::size::MaxNstations];
-
-//   float ZSta[constants::size::MaxNstations];
-//   for (int ista = 0; ista < nStations; ista++) {
-//     ZSta[ista] = sta[ista]->fZ;
-//     mxy[ista].SetCov(1., 0., 1.);
-//   }
-
-//   // OT added
-//   float isPrimary = 0;  // set using fitPV info
-
-//   // get hits of current track
-//   for (int ista = 0; ista < nStations; ista++) {
-//     w[ista]      = false;
-//     w_time[ista] = false;
-//     z[ista]      = ZSta[ista];
-//   }
-
-//   const int nHitsTrack = 3;  // triplet
-//   int iSta[constants::size::MaxNstations];
-
-//   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
-
-//   for (int ih = 0; ih < nHitsTrack; ih++) {
-//     const ca::Hit& hit = fvHits[triplet[ih]];
-//     const int ista     = hit.Station();
-//     auto detSystemId   = sta[ista]->GetDetectorID();
-
-//     // printf("ih: %d, ista: %d \n", ih, ista);
-
-//     iSta[ih] = ista;
-//     w[ista]  = true;
-//     if (sta[ista]->timeInfo) {
-//       w_time[ista] = true;
-//     }
-//     // subtract misalignment tolerances to get the original hit errors
-//     float dX2Orig = hit.dX2();  //- fParams[fIteration].GetMisalignmentXsq(detSystemId);
-//     float dY2Orig = hit.dY2();  // - fParams[fIteration].GetMisalignmentYsq(detSystemId);
-//     float dXYOrig = hit.dXY();
-//     // if (dX2Orig < 0. || dY2Orig < 0. || xpu::abs(dXYOrig / xpu::sqrt(dX2Orig * dY2Orig)) > 1.) {
-//     //   dX2Orig = hit.dX2();
-//     //   dY2Orig = hit.dY2();
-//     // }
-//     float dT2Orig = hit.dT2();  // - fParams[fIteration].GetMisalignmentTsq(detSystemId);
-//     // if (dT2Orig < 0.) {
-//     //   dT2Orig = hit.dT2();
-//     // }
-
-//     // printf("ih: %d, ista: %d \n", ih, ista);
-
-//     /// crashes on all
-//     // printf("mis X %f \n", fParams[fIteration].GetMisalignmentXsq(detSystemId));
-//     // printf("mis X %f \n", fParams[fIteration].GetMisalignmentYsq(detSystemId));
-//     // printf("mis X %f \n", fParams[fIteration].GetMisalignmentTsq(detSystemId));
-
-//     x[ista]    = hit.X();  //x_temp;
-//     y[ista]    = hit.Y();  //y_temp;
-//     time[ista] = hit.T();
-//     dt2[ista]  = dT2Orig;
-//     if (!sta[ista]->timeInfo) {
-//       dt2[ista] = 1.e4;
-//     }
-//     z[ista]          = hit.Z();
-//     fB[ista]         = sta[ista]->fieldSlice.GetFieldValue(x[ista], y[ista]);
-//     mxy[ista].X()    = hit.X();
-//     mxy[ista].Y()    = hit.Y();
-//     mxy[ista].Dx2()  = dX2Orig;
-//     mxy[ista].Dy2()  = dY2Orig;
-//     mxy[ista].Dxy()  = dXYOrig;
-//     mxy[ista].NdfX() = 1.;
-//     mxy[ista].NdfY() = 1.;
-//   }  // ih
-
-//   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
-
-//   {
-//     const ca::Hit& f_hit = fvHits[triplet[0]];
-//     const int f_ista     = f_hit.Station();
-//     z_start              = z[f_ista];
-//     x_first              = x[f_ista];
-//     y_first              = y[f_ista];
-//     time_first           = time[f_ista];
-//     wtime_first          = sta[f_ista]->timeInfo ? 1. : 0.;
-//     dt2_first            = dt2[f_ista];
-//     mxy_first.X()        = mxy[f_ista].X();
-//     mxy_first.Y()        = mxy[f_ista].Y();
-//     mxy_first.Dx2()      = mxy[f_ista].Dx2();
-//     mxy_first.Dy2()      = mxy[f_ista].Dy2();
-//     mxy_first.Dxy()      = mxy[f_ista].Dxy();
-//     mxy_first.NdfX()     = mxy[f_ista].NdfX();
-//     mxy_first.NdfY()     = mxy[f_ista].NdfY();
-//   }
-
-//   {
-//     const ca::Hit& l_hit = fvHits[triplet[2]];
-//     const int l_ista     = l_hit.Station();
-//     z_end                = z[l_ista];
-//     x_last               = x[l_ista];
-//     y_last               = y[l_ista];
-//     time_last            = time[l_ista];
-//     wtime_last           = sta[l_ista]->timeInfo ? 1. : 0.;
-//     dt2_last             = dt2[l_ista];
-//     mxy_last.X()         = mxy[l_ista].X();
-//     mxy_last.Y()         = mxy[l_ista].Y();
-//     mxy_last.Dx2()       = mxy[l_ista].Dx2();
-//     mxy_last.Dy2()       = mxy[l_ista].Dy2();
-//     mxy_last.Dxy()       = mxy[l_ista].Dxy();
-//     mxy_last.NdfX()      = mxy[l_ista].NdfX();
-//     mxy_last.NdfY()      = mxy[l_ista].NdfY();
-//   }
-
-//   for (int ih = nHitsTrack - 1; ih >= 0; ih--) {
-//     const int ista = iSta[ih];
-//     By[ista]       = sta[ista]->fieldSlice.GetFieldValue(0., 0.).y;
-//   }
-
-//   fit.GuessTrack(z_end, x, y, z, time, By, w, w_time, nStations);
-
-//   // following output seems fine. chi2 is zero and q/p all finite.
-//   // printf("iGThread: %d, %d, %d, %d, chi2= %.4f, q/p= %.4f GuessTrack\n", iGThread, triplet[0], triplet[1], triplet[2], fit.Tr().GetChiSq(), fit.Tr().Qp());
-
-//   tr.Qp() = 1. / 1.1;
-
-//   for (int iter = 0; iter < 2; iter++) {  // 1.5 iterations
-
-//     fit.SetQp0(tr.Qp());
-
-//     // fit backward
-//     int ista = nStations - 1;
-
-//     time_last = w_time[ista] ? time_last : 0;
-//     dt2_last  = w_time[ista] ? dt2_last : 1.e6f;
-
-//     tr.ResetErrors(mxy_last.Dx2(), mxy_last.Dy2(), 0.1, 0.1, 1.0, dt2_last, 1.e-2f);
-//     tr.C10()  = mxy_last.Dxy();
-//     tr.X()    = mxy_last.X();
-//     tr.Y()    = mxy_last.Y();
-//     tr.Time() = time_last;
-//     tr.Vi()   = constants::phys::SpeedOfLightInv;
-//     tr.InitVelocityRange(0.5);
-//     tr.Ndf()     = -5. + 2.;
-//     tr.NdfTime() = -2. + wtime_last;
-
-//     fldZ1 = z[ista];
-//     fldB1 = sta[ista]->fieldSlice.GetFieldValue(tr.X(), tr.Y());
-
-//     fldB1.Combine(fB[ista], w[ista]);
-
-//     fldZ2    = z[ista - 2];
-//     float dz = fldZ2 - fldZ1;
-//     fldB2    = sta[ista]->fieldSlice.GetFieldValue(tr.X() + tr.Tx() * dz, tr.Y() + tr.Ty() * dz);
-//     fldB2.Combine(fB[ista - 2], w[ista - 2]);
-
-//     fld.Set(fldB2, fldZ2, fldB1, fldZ1, fldB0, fldZ0);
-
-//     for (--ista; ista >= 0; ista--) {
-//       fldZ0 = z[ista];
-//       dz    = (fldZ1 - fldZ0);
-//       fldB0 = sta[ista]->fieldSlice.GetFieldValue(tr.X() - tr.Tx() * dz, tr.Y() - tr.Ty() * dz);
-//       fldB0.Combine(fB[ista], w[ista]);
-
-//       fld.Set(fldB0, fldZ0, fldB1, fldZ1, fldB2, fldZ2);
-
-//       bool initialised = (z[ista] < z_end) & (z_start <= z[ista]);
-
-//       // printf("intialised: %d , z[ista]: %f , z_start: %f , z_end: %f", initialised, z[ista], z_start, z_end);
-
-//       fld1 = fld;
-
-//       fit.SetMask(initialised);
-//       fit.Extrapolate(z[ista], fld1);
-//       // printf("Extrapolate: %d ", iGThread);
-//       auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
-//       fit.MultipleScattering(radThick);
-//       fit.EnergyLossCorrection(radThick, kf::FitDirection::kUpstream);
-//       fit.SetMask(initialised && w[ista]);
-//       fit.FilterXY(mxy[ista]);
-//       fit.FilterTime(time[ista], dt2[ista], sta[ista]->timeInfo);
-
-//       fldB2 = fldB1;
-//       fldZ2 = fldZ1;
-//       fldB1 = fldB0;
-//       fldZ1 = fldZ0;
-//     }
-
-//     // if (iter == 0) {
-//     //   No nan values here.
-//     //   printf("iGThread: %d, %d, %d, %d, chi2= %.4f, q/p= %.4f \t ITER 0 BACK\n", iGThread, triplet[0], triplet[1],
-//     //          triplet[2], fit.Tr().GetChiSq(), fit.Tr().Qp());
-//     // }
-
-//     if (iter == 0) { // 1
-//       break;
-//     }  // only 1.5 iterations
-
-//     // fit forward
-
-//     ista = 0;
-
-//     tr.ResetErrors(mxy_first.Dx2(), mxy_first.Dy2(), 0.1, 0.1, 1., dt2_first, 1.e-2);
-//     tr.C10()  = mxy_first.Dxy();
-//     tr.X()    = mxy_first.X();
-//     tr.Y()    = mxy_first.Y();
-//     tr.Time() = time_first;
-//     tr.Vi()   = constants::phys::SpeedOfLightInv;
-//     tr.InitVelocityRange(0.5);
-//     tr.Ndf()     = -5. + 2.;
-//     tr.NdfTime() = -2. + wtime_first;
-//     fit.SetQp0(tr.Qp());
-
-//     fldZ1 = z[ista];
-//     fldB1 = sta[ista]->fieldSlice.GetFieldValue(tr.X(), tr.Y());
-//     fldB1.Combine(fB[ista], w[ista]);
-
-//     fldZ2 = z[ista + 2];
-//     dz    = fldZ2 - fldZ1;
-//     fldB2 = sta[ista]->fieldSlice.GetFieldValue(tr.X() + tr.Tx() * dz, tr.Y() + tr.Ty() * dz);
-//     fldB2.Combine(fB[ista + 2], w[ista + 2]);
-//     fld.Set(fldB2, fldZ2, fldB1, fldZ1, fldB0, fldZ0);
-
-//     for (++ista; ista < nStations; ista++) {
-//       fldZ0 = z[ista];
-//       dz    = (fldZ1 - fldZ0);
-//       fldB0 = sta[ista]->fieldSlice.GetFieldValue(tr.X() - tr.Tx() * dz, tr.Y() - tr.Ty() * dz);
-//       fldB0.Combine(fB[ista], w[ista]);
-//       fld.Set(fldB0, fldZ0, fldB1, fldZ1, fldB2, fldZ2);
-
-//       bool initialised = (z[ista] <= z_end) & (z_start < z[ista]);
-
-//       fit.SetMask(initialised);
-//       fit.Extrapolate(z[ista], fld);
-//       auto radThick = fMaterialMapTables[fMaterialMap[ista].GetBin(tr.X(), tr.Y())];
-//       fit.MultipleScattering(radThick);
-//       fit.EnergyLossCorrection(radThick, kf::FitDirection::kDownstream);
-//       fit.SetMask(initialised && w[ista]);
-//       fit.FilterXY(mxy[ista]);
-//       fit.FilterTime(time[ista], dt2[ista], sta[ista]->timeInfo);
-
-//       fldB2 = fldB1;
-//       fldZ2 = fldZ1;
-//       fldB1 = fldB0;
-//       fldZ1 = fldZ0;
-//     }
-//     if (iter == 0) {
-//       printf("iGThread: %d, %d, %d, %d, chi2= %.4f, q/p= %.4f \t ITER 0 FRONT\n", iGThread, triplet[0], triplet[1],
-//              triplet[2], fit.Tr().GetChiSq(), fit.Tr().Qp());
-//     }
-//   }  // iter 1.5
-
-//   // printf("iGThread: %d, iHitL: %d, iTriplet: %d \n", iGThread, iHitL, iTriplet);
-
-//   /// if track chi2 per dof is larger than threshold. Also kill negative and non-finite values
-//   /// if track p low than threshold_qp, then kill the track
-//   /// then remove triplet from list
-//   const float threshold_chi2 = 19.5;  // def - 19.5
-//   const float threshold_qp   = 5.0f;  // def - 5.0f
-
-//   const float chi2 = fit.Tr().GetChiSq();
-//   bool killTrack   = !xpu::isfinite(chi2) || (chi2 < 0) || (chi2 > threshold_chi2);
-
-//   // momentum cut to reduce ghosts
-//   if (xpu::abs(fit.Tr().Qp()) > threshold_qp) {
-//     killTrack = true;
-//   }
-
-//   printf("iGThread: %d, %d, %d, %d, chi2= %.4f, q/p= %.4f, killed= %d \n", iGThread, triplet[0], triplet[1], triplet[2],
-//          chi2, fit.Tr().Qp(), killTrack);
-
-//   const float qp  = fit.Tr().Qp();
-//   const float Cqp = fit.Tr().C44() + 0.001;  // 0.001 magic number added. (see triplet constructor)
-//   const float Tx  = fit.Tr().Tx();
-//   const float C22 = fit.Tr().C22();
-//   const float Ty  = fit.Tr().Ty();
-//   const float C33 = fit.Tr().C33();
-//   const std::array<float, 7> tripletParams{chi2, qp, Cqp, Tx, C22, Ty, C33};
-//   fvTripletParams_FastPrim[iHitL][iTriplet]   = tripletParams;
-//   fTripletsSelected_FastPrim[iHitL][iTriplet] = !killTrack;
-// }  // FitTripletsOT_FastPrim
-
-
 XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim::context& ctx) const
 {
   const int iGThread       = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
@@ -857,7 +507,6 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim
   TrackParam<float>& tr = fit.Tr();
   fit.SetParticleMass(constants::phys::MuonMass);
   fit.SetDoFitVelocity(true);
-
 
   // ca::Track t;
   //
@@ -1108,7 +757,6 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_FastPrim(FitTripletsOT_FastPrim
   fTripletsSelected_FastPrim[iHitL][iTriplet] = !killTrack;
 }  // FitTripletsOT_FastPrim
 
-
 XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::context& ctx) const
 {
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
@@ -1233,11 +881,6 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
     // }
 
     // printf("ih: %d, ista: %d \n", ih, ista);
-
-    /// crashes on all
-    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentXsq(detSystemId));
-    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentYsq(detSystemId));
-    // printf("mis X %f \n", fParams[fIteration].GetMisalignmentTsq(detSystemId));
 
     x[ista]    = hit.X();  //x_temp;
     y[ista]    = hit.Y();  //y_temp;
@@ -1451,6 +1094,7 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
       dz    = (fldZ1 - fldZ0);
       fldB0 = sta[ista]->fieldSlice.GetFieldValue(tr.X() - tr.Tx() * dz, tr.Y() - tr.Ty() * dz);
       fldB0.Combine(fB[ista], w[ista]);
+
       fld.Set(fldB0, fldZ0, fldB1, fldZ1, fldB2, fldZ2);
 
       bool initialised = (z[ista] <= z_end) & (z_start < z[ista]);
@@ -1501,6 +1145,9 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
     if (isPrimary != 1.0) killTrack = true;  // not primary track
   }
 
+  // printf("iGThread: %d, %d, %d, %d, chi2= %.4f, q/p= %.4f, killed= %d \n", iGThread, triplet[0], triplet[1],
+  //  triplet[2], chi2, fit.Tr().Qp(), killTrack);
+
   const float qp  = fit.Tr().Qp();
   const float Cqp = fit.Tr().C44() + 0.001;  // 0.001 magic number added. (see triplet constructor)
   const float Tx  = fit.Tr().Tx();
@@ -1511,6 +1158,123 @@ XPU_D void GnnGpuGraphConstructor::FitTripletsOT_Other(FitTripletsOT_Other::cont
   fvTripletParams_Other[iHitL][iTriplet]   = tripletParams;
   fTripletsSelected_Other[iHitL][iTriplet] = !killTrack;
 }  // FitTripletsOT_Other
+
+XPU_D void GnnGpuGraphConstructor::Competition(Competition::context& ctx) const
+{
+  const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
+  if (iGThread >= 1) return;
+
+  printf("In GPU competition\n");
+  printf("Num tracks: %d", fNTracks);
+  printf("back key hit 0: %d", fvHitsAll[0].BackKey());
+
+  for (int i = 0; i < 5; i++) {
+    printf("Track %d \n", i);
+    // printf("nhits: %d \n", fTrackNumHits[i]);
+    // printf("chi2: %d \n", fTrackAndScores[i].second);
+    printf("selected: %d \n", fSelectedTrackIndexes[i]);
+    printf("hit0: %d \n", fTrackAndScores[i].first[0]);
+    printf("hit1: %d \n", fTrackAndScores[i].first[1]);
+    printf("hit2: %d \n", fTrackAndScores[i].first[2]);
+    // printf("Track %d: chi2= %d, nHits= %d\n", i, fTrackAndScores[i].second, fTrackNumHits[i]);
+    // for (int iHit = 0; iHit < 12; iHit++)
+    //   printf("%d ", fTrackAndScores[i].first[iHit]);
+    // printf("\n");
+  }
+
+  // for (std::size_t iTrack = 0; iTrack < fNTracks; iTrack++) {
+  //   // check that all hits are not used
+  //   auto& track    = fTrackAndScores[iTrack].first;
+  //   int selected   = 1;
+  //   uint nUsedHits = 0;
+  //   std::array<int, 12> usedHitIDs;
+  //   std::array<int, 12> usedHitIndexesInTrack;
+  //   for (int i = 0; i < 12; i++) {
+  //     usedHitIDs[i]            = -1;
+  //     usedHitIndexesInTrack[i] = -1;
+  //   }
+  //   for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
+  //     if (track[iHit] == -1) break;  // end of track
+  //     const ca::Hit& hit = fvHitsAll[track[iHit]];
+  //     if (fHitKeyFlags[hit.FrontKey()] || fHitKeyFlags[hit.BackKey()]) {
+  //       usedHitIDs[nUsedHits]            = track[iHit];
+  //       usedHitIndexesInTrack[nUsedHits] = iHit;
+  //       nUsedHits++;
+  //     }
+  //   }
+  //   if (nUsedHits == 0) {  // clean tracks. Mark all hits as used
+  //     for (const auto& hit : track) {
+  //       if (hit == -1) break;
+  //       fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
+  //       fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
+  //     }
+  //     continue;
+  //   }
+  //   else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
+  //     if (track.size() - nUsedHits >= 4) {
+  //       // remove used hits.
+  //       for (int iUsedHit = 0; iUsedHit < usedHitIndexesInTrack.size(); iUsedHit++) {
+  //         if (usedHitIndexesInTrack[iUsedHit] != -1) track[iUsedHit] = -1;
+  //       }
+
+  //       // mark remaining hits as used
+  //       for (const auto& hit : track) {
+  //         if (hit == -1) continue;
+  //         fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
+  //         fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
+  //       }
+  //       continue;
+  //     }
+  //     else {
+  //       selected = 0;  // remove track if begging not successful
+  //     }
+  //   }
+
+  //   if ((selected == 0)
+  //       && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
+  //     for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
+  //       if (fTrackAndScores[iBeg].first.size() <= fTrackAndScores[iTrack].first.size())
+  //         continue;                                         // only beg from longer tracks
+  //       if (fTrackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
+  //       if (fTrackAndScores[iBeg].second < fTrackAndScores[iTrack].second)
+  //         continue;                // dont donate to higher chi2 beggar
+  //       if (selected == 1) break;  // no need for more begging
+
+  //       auto& begTrack = fTrackAndScores[iBeg].first;
+  //       for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
+  //         const auto begHit = begTrack[iBegHit];
+  //         if (begHit == -1) continue;
+  //         if (begHit == usedHitIDs[0])
+  //           continue;  // dont let exact hit be borrowed. Mostly tracks with one hit missing beg
+  //         if (fvHitsAll[begHit].FrontKey() == fvHitsAll[usedHitIDs[0]].FrontKey()
+  //             || fvHitsAll[begHit].BackKey() == fvHitsAll[usedHitIDs[0]].BackKey()) {  // only one track will match
+  //           // remove iBegHit from begTrack
+  //           begTrack[iBegHit] = -1;
+  //           // Probably redundant.
+  //           fHitKeyFlags[fvHitsAll[begHit].FrontKey()] = 1;
+  //           fHitKeyFlags[fvHitsAll[begHit].BackKey()]  = 1;
+
+  //           selected = 1;
+  //           break;
+  //         }
+  //       }
+  //     }
+  //   }
+  //   fSelectedTrackIndexes[iTrack] = selected;
+  //   int trackLength               = 0;
+  //   for (int iHit = 0; iHit < track.size(); iHit++) {
+  //     if (track[iHit] != -1) trackLength++;
+  //   }
+  //   fTrackNumHits[iTrack] = trackLength;
+  //   // mark all hits as used
+  //   for (const auto& hit : track) {
+  //     if (hit == -1) continue;
+  //     fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
+  //     fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
+  //   }
+  // }  // iTrack
+}  // Competition
+
 
 XPU_D float GnnGpuGraphConstructor::hitDistanceSq(std::array<float, 6>& a, std::array<float, 6>& b) const
 {

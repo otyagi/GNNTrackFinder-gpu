@@ -79,10 +79,14 @@ namespace cbm::algo::ca
     /// Save triplets as tracks for debugging after KF fitting
     void SaveFittedTripletsAsTracks();
 
+    void CooperativeCompetitionCPU(std::vector<std::pair<std::vector<int>, float>>& trackAndScores);
+
+    void CooperativeCompetitionGPU(std::vector<std::pair<std::vector<int>, float>>& trackAndScores);
+
     void FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
                       std::vector<std::vector<float>>& trackletFitParams);
 
-    void FindTracksCpu(const int iteration, const bool doCompetition);
+    void FindTracks(const int iteration, const bool doCompetition);
 
     /// Get the number of triplets
     unsigned int GetNofTriplets() const { return fNTriplets; }

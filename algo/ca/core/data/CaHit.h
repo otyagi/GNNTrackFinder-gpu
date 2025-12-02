@@ -95,10 +95,10 @@ namespace cbm::algo::ca
     /// getters
 
     /// Get the front key index
-    HitKeyIndex_t FrontKey() const { return fFrontKey; }
+    XPU_D HitKeyIndex_t FrontKey() const { return fFrontKey; }
 
     /// Get the back key index
-    HitKeyIndex_t BackKey() const { return fBackKey; }
+    XPU_D HitKeyIndex_t BackKey() const { return fBackKey; }
 
     /// Get the X coordinate
     XPU_D fscal X() const { return fX; }
