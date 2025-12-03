@@ -1164,115 +1164,107 @@ XPU_D void GnnGpuGraphConstructor::Competition(Competition::context& ctx) const
   const int iGThread = ctx.block_dim_x() * ctx.block_idx_x() + ctx.thread_idx_x();
   if (iGThread >= 1) return;
 
-  printf("In GPU competition\n");
-  printf("Num tracks: %d", fNTracks);
-  printf("back key hit 0: %d", fvHitsAll[0].BackKey());
+  // printf("In GPU competition\n");
 
-  for (int i = 0; i < 5; i++) {
-    printf("Track %d \n", i);
-    // printf("nhits: %d \n", fTrackNumHits[i]);
-    // printf("chi2: %d \n", fTrackAndScores[i].second);
-    printf("selected: %d \n", fSelectedTrackIndexes[i]);
-    printf("hit0: %d \n", fTrackAndScores[i].first[0]);
-    printf("hit1: %d \n", fTrackAndScores[i].first[1]);
-    printf("hit2: %d \n", fTrackAndScores[i].first[2]);
-    // printf("Track %d: chi2= %d, nHits= %d\n", i, fTrackAndScores[i].second, fTrackNumHits[i]);
-    // for (int iHit = 0; iHit < 12; iHit++)
-    //   printf("%d ", fTrackAndScores[i].first[iHit]);
-    // printf("\n");
-  }
+  // for (int i = 0; i < 20; i++){
+  //   printf("HitKeyFlag: %d\n", (bool)fHitKeyFlags[i]);
+  // }
 
-  // for (std::size_t iTrack = 0; iTrack < fNTracks; iTrack++) {
-  //   // check that all hits are not used
-  //   auto& track    = fTrackAndScores[iTrack].first;
-  //   int selected   = 1;
-  //   uint nUsedHits = 0;
-  //   std::array<int, 12> usedHitIDs;
-  //   std::array<int, 12> usedHitIndexesInTrack;
-  //   for (int i = 0; i < 12; i++) {
-  //     usedHitIDs[i]            = -1;
-  //     usedHitIndexesInTrack[i] = -1;
-  //   }
-  //   for (std::size_t iHit = 0; iHit < track.size(); iHit++) {
-  //     if (track[iHit] == -1) break;  // end of track
-  //     const ca::Hit& hit = fvHitsAll[track[iHit]];
-  //     if (fHitKeyFlags[hit.FrontKey()] || fHitKeyFlags[hit.BackKey()]) {
-  //       usedHitIDs[nUsedHits]            = track[iHit];
-  //       usedHitIndexesInTrack[nUsedHits] = iHit;
-  //       nUsedHits++;
-  //     }
-  //   }
-  //   if (nUsedHits == 0) {  // clean tracks. Mark all hits as used
-  //     for (const auto& hit : track) {
-  //       if (hit == -1) break;
-  //       fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
-  //       fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
-  //     }
-  //     continue;
-  //   }
-  //   else if (nUsedHits > 0) {  // some hits used but still >=4 hits left
-  //     if (track.size() - nUsedHits >= 4) {
-  //       // remove used hits.
-  //       for (int iUsedHit = 0; iUsedHit < usedHitIndexesInTrack.size(); iUsedHit++) {
-  //         if (usedHitIndexesInTrack[iUsedHit] != -1) track[iUsedHit] = -1;
-  //       }
+  // for (int i = 0; i < 15; i++) {
+  //   printf("Track %d: chi2= %.4f, nHits= %d\n", i, fScores[i], fTrackNumHits[i]);
+  //   printf("selected: %d \n", fSelectedTrackIndexes[i]);
+  //   for (int iHit = 0; iHit < 12; iHit++)
+  //     printf("%d ", fTrack[i][iHit]);
+  //   printf("\n");
+  // }
 
-  //       // mark remaining hits as used
-  //       for (const auto& hit : track) {
-  //         if (hit == -1) continue;
-  //         fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
-  //         fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
-  //       }
-  //       continue;
-  //     }
-  //     else {
-  //       selected = 0;  // remove track if begging not successful
-  //     }
-  //   }
+  int nSelected = 0;
 
-  //   if ((selected == 0)
-  //       && (track.size() - nUsedHits == 3)) {  // 'beg' for hit from longer accepted track only if one hit required
-  //     for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {  // track to beg from
-  //       if (fTrackAndScores[iBeg].first.size() <= fTrackAndScores[iTrack].first.size())
-  //         continue;                                         // only beg from longer tracks
-  //       if (fTrackAndScores[iBeg].first.size() < 5) break;  // atleast 4 hits must be left after donation
-  //       if (fTrackAndScores[iBeg].second < fTrackAndScores[iTrack].second)
-  //         continue;                // dont donate to higher chi2 beggar
-  //       if (selected == 1) break;  // no need for more begging
+  for (std::size_t iTrack = 0; iTrack < fNTracks; iTrack++) {
+    // check that all hits are not used
+    auto& track   = fTrack[iTrack];
+    int selected  = 0;
+    int nUsedHits = 0;
+    std::array<int, 12> usedHitIDs;
+    std::array<int, 12> usedHitIndexesInTrack;
+    for (int i = 0; i < 12; i++) {
+      usedHitIDs[i]            = -1;
+      usedHitIndexesInTrack[i] = -1;
+    }
+    for (std::size_t iHit = 0; iHit < 12; iHit++) {
+      if (track[iHit] == -1) break;  // end of track
+      const ca::Hit& hit = fvHitsAll[track[iHit]];
+      if (fHitKeyFlags[hit.FrontKey()] || fHitKeyFlags[hit.BackKey()]) {
+        usedHitIDs[nUsedHits]            = track[iHit];
+        usedHitIndexesInTrack[nUsedHits] = iHit;
+        nUsedHits++;
+      }
+    }
+    // printf("Track: %d, nUsedHits: %d \n", iTrack, nUsedHits);
+    if (nUsedHits == 0) {  // clean tracks. Mark all hits as used
+      selected = 1;
+      // printf("Track %d selected with no used hits.\n", iTrack);
+    }
+    else if (nUsedHits > 0 && (fTrackNumHits[iTrack] - nUsedHits >= 4)) {
+      // remove used hits.
+      for (int iUsedHit = 0; iUsedHit < 12; iUsedHit++) {
+        if (usedHitIndexesInTrack[iUsedHit] != -1) {
+          track[usedHitIndexesInTrack[iUsedHit]] = -1;
+          fTrackNumHits[iTrack]--;
+        }
+      }
+      selected = 1;
+      // printf("Track %d selected with used hits but no exchange.\n", iTrack);
+    }
 
-  //       auto& begTrack = fTrackAndScores[iBeg].first;
-  //       for (std::size_t iBegHit = 0; iBegHit < begTrack.size(); iBegHit++) {
-  //         const auto begHit = begTrack[iBegHit];
-  //         if (begHit == -1) continue;
-  //         if (begHit == usedHitIDs[0])
-  //           continue;  // dont let exact hit be borrowed. Mostly tracks with one hit missing beg
-  //         if (fvHitsAll[begHit].FrontKey() == fvHitsAll[usedHitIDs[0]].FrontKey()
-  //             || fvHitsAll[begHit].BackKey() == fvHitsAll[usedHitIDs[0]].BackKey()) {  // only one track will match
-  //           // remove iBegHit from begTrack
-  //           begTrack[iBegHit] = -1;
-  //           // Probably redundant.
-  //           fHitKeyFlags[fvHitsAll[begHit].FrontKey()] = 1;
-  //           fHitKeyFlags[fvHitsAll[begHit].BackKey()]  = 1;
+    // 'beg' for hit from longer accepted track only if one hit required
+    if ((selected == 0) && (fTrackNumHits[iTrack] - nUsedHits == 3)) {
+      // printf("Track %d begging with %d used hits.\n", iTrack, nUsedHits);
+      for (std::size_t iBeg = 0; iBeg < iTrack; iBeg++) {            // track to beg from
+        if (fTrackNumHits[iBeg] <= fTrackNumHits[iTrack]) continue;  // only beg from longer tracks
+        if (fTrackNumHits[iBeg] < 5) break;                          // atleast 4 hits must be left after donation
+        if (fScores[iBeg] < fScores[iTrack]) continue;               // dont donate to higher chi2 beggar
+        if (selected == 1) break;                                    // no need for more begging
 
-  //           selected = 1;
-  //           break;
-  //         }
-  //       }
-  //     }
-  //   }
-  //   fSelectedTrackIndexes[iTrack] = selected;
-  //   int trackLength               = 0;
-  //   for (int iHit = 0; iHit < track.size(); iHit++) {
-  //     if (track[iHit] != -1) trackLength++;
-  //   }
-  //   fTrackNumHits[iTrack] = trackLength;
-  //   // mark all hits as used
-  //   for (const auto& hit : track) {
-  //     if (hit == -1) continue;
-  //     fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
-  //     fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
-  //   }
-  // }  // iTrack
+        auto& begTrack = fTrack[iBeg];
+        for (std::size_t iBegHit = 0; iBegHit < 12; iBegHit++) {
+          const auto begHit = begTrack[iBegHit];
+          if (begHit == -1) continue;
+          if (begHit == usedHitIDs[0])
+            continue;  // dont let exact hit be borrowed. 
+          // @todo: Check borrowing over all used hits. Mostly tracks with one hit missing beg
+          if (fvHitsAll[begHit].FrontKey() == fvHitsAll[usedHitIDs[0]].FrontKey()
+              || fvHitsAll[begHit].BackKey() == fvHitsAll[usedHitIDs[0]].BackKey()) {  // only one track will match
+            // remove iBegHit from begTrack
+            begTrack[iBegHit] = -1;
+            fTrackNumHits[iBeg]--;
+            // Probably redundant.
+            fHitKeyFlags[fvHitsAll[begHit].FrontKey()] = 1;
+            fHitKeyFlags[fvHitsAll[begHit].BackKey()]  = 1;
+            selected = 1;
+            break;
+          }
+        }
+      }
+    }
+    fSelectedTrackIndexes[iTrack] = selected;
+    int trackLength               = 0;
+    for (int iHit = 0; iHit < 12; iHit++) {
+      if (track[iHit] != -1) trackLength++;
+    }
+    fTrackNumHits[iTrack] = trackLength;
+    // mark all hits as used
+    for (const auto& hit : track) {
+      if (hit == -1) continue;
+      fHitKeyFlags[fvHitsAll[hit].FrontKey()] = 1;
+      fHitKeyFlags[fvHitsAll[hit].BackKey()]  = 1;
+    }
+    if (selected == 1) {
+      // printf("Track %d is selected (%d) with %d hits.\n", iTrack, fSelectedTrackIndexes[iTrack], fTrackNumHits[iTrack]);
+      nSelected++;
+    }
+  }  // iTrack
+  // printf("Tracks Selected: %d \n", nSelected);
 }  // Competition
 
 

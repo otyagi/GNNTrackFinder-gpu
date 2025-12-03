@@ -191,33 +191,30 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   fNTriplets = 0;
 
   xpu::device_prop prop{xpu::device::active()};
-
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     LOG(info) << "Running GPU tracking chain on device " << prop.name() << ", fIteration: " << fIteration;
   }
+  LOG(info) << "Num hits in event: " << fNHits;
 
   bool isCpu            = xpu::device::active().backend() == xpu::cpu;
   float embedHitsBlocks = std::ceil((float) activeHits.size() / GnnGpuConstants::kEmbedHitsBlockSize);
-
-  fGraphConstructor.fIteration = fIteration;
-  fGraphConstructor.fNHits     = fNHits;
-
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
-
+  
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     fEventTimeMonitor.nIterations = fIteration;
     xpu::push_timer("Full_time");
-    xpu::push_timer("EmbedHits_time");
   }
 
+  fGraphConstructor.fIteration = fIteration;
+  fGraphConstructor.fNHits     = fNHits;
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+  
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::push_timer("EmbedHits_time");
+  }
   fQueue.launch<EmbedHits>(xpu::n_blocks(embedHitsBlocks));
-
-  LOG(info) << "Num hits in event: " << fNHits;
-
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                       = xpu::pop_timer();
     fEventTimeMonitor.EmbedHits_time[fIteration] = step_time;
-    // LOG(info) << "EmbedHits_time: " << step_time.wall();
     xpu::push_timer("NearestNeighbours_time");
   }
 
@@ -228,17 +225,16 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     fQueue.launch<NearestNeighbours_Other>(xpu::n_blocks(embedHitsBlocks));
   }
 
-  fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
-  xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
-  const int nDoublets = std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
-  LOG(info) << "GPU Tracking: Num doublets found: " << nDoublets;
+  // fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
+  // xpu::h_view vfNNeighbours(fGraphConstructor.fNNeighbours);
+  // const int nDoublets = std::accumulate(vfNNeighbours.begin(), vfNNeighbours.end(), 0);
+  // LOG(info) << "GPU Tracking: Num doublets found: " << nDoublets;
+
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                               = xpu::pop_timer();
     fEventTimeMonitor.NearestNeighbours_time[fIteration] = step_time;
-    // LOG(info) << "NearestNeighbours_time: " << step_time.wall();
     xpu::push_timer("MakeTripletsOT_time");
   }
-
   if (fIteration == 0) {
     fQueue.launch<MakeTripletsOT_FastPrim>(xpu::n_blocks(embedHitsBlocks));
   }
@@ -246,14 +242,14 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     fQueue.launch<MakeTripletsOT_Other>(xpu::n_blocks(embedHitsBlocks), fIteration);
   }
 
-  fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
-  xpu::h_view vfNTriplets(fGraphConstructor.fNTriplets);
-  const int nTriplets = std::accumulate(vfNTriplets.begin(), vfNTriplets.end(), 0);
-  LOG(info) << "GPU Tracking: Num Triplets constructed: " << nTriplets;
+  // fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
+  // xpu::h_view vfNTriplets(fGraphConstructor.fNTriplets);
+  // const int nTriplets = std::accumulate(vfNTriplets.begin(), vfNTriplets.end(), 0);
+  // LOG(info) << "GPU Tracking: Num Triplets constructed: " << nTriplets;
+
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                            = xpu::pop_timer();
     fEventTimeMonitor.MakeTripletsOT_time[fIteration] = step_time;
-    // LOG(info) << "MakeTripletsOT_time: " << step_time.wall();
     xpu::push_timer("CompressTripletsOT_time");
   }
 
@@ -276,7 +272,6 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                              = xpu::pop_timer();
     fEventTimeMonitor.CompressTriplets_time[fIteration] = step_time;
-    // LOG(info) << "CompressTripletsOT_time: " << step_time.wall();
     xpu::push_timer("FitTripletsOT_time");
   }
 
@@ -291,91 +286,95 @@ void GnnGpuTrackFinderSetup::RunGpuTracking()
     fQueue.launch<FitTripletsOT_Other>(xpu::n_blocks(fitTripletsBlocks));
   }
 
-  if (fIteration == 0) {
-    fQueue.copy(fGraphConstructor.fTripletsSelected_FastPrim, xpu::d2h);
-    xpu::h_view vfNTripletsSelected(fGraphConstructor.fTripletsSelected_FastPrim);
-    size_t nTripletsSelected = 0;
-    for (auto iHit = 0; iHit < vfNTripletsSelected.size(); iHit++) {
-      const auto& tripsHit = vfNTripletsSelected[iHit];
-      const int nTripHit   = vfNTriplets[iHit];  // uninitialized after nTripHit
-      for (auto iTrip = 0; iTrip < nTripHit; iTrip++) {
-        nTripletsSelected += tripsHit[iTrip];  // implicit cast to int
-      }
-    }
-    LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
-  }
-  else {
-    fQueue.copy(fGraphConstructor.fTripletsSelected_Other, xpu::d2h);
-    xpu::h_view vfNTripletsSelected(fGraphConstructor.fTripletsSelected_Other);
-    size_t nTripletsSelected = 0;
-    for (auto iHit = 0; iHit < vfNTripletsSelected.size(); iHit++) {
-      const auto& tripsHit = vfNTripletsSelected[iHit];
-      const int nTripHit   = vfNTriplets[iHit];  // uninitialized after nTripHit
-      for (auto iTrip = 0; iTrip < nTripHit; iTrip++) {
-        nTripletsSelected += tripsHit[iTrip];  // implicit cast to int
-      }
-    }
-    LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
-  }
+  // if (fIteration == 0) {
+  //   fQueue.copy(fGraphConstructor.fTripletsSelected_FastPrim, xpu::d2h);
+  //   xpu::h_view vfNTripletsSelected(fGraphConstructor.fTripletsSelected_FastPrim);
+  //   size_t nTripletsSelected = 0;
+  //   for (auto iHit = 0; iHit < vfNTripletsSelected.size(); iHit++) {
+  //     const auto& tripsHit = vfNTripletsSelected[iHit];
+  //     const int nTripHit   = vfNTriplets[iHit];  // uninitialized after nTripHit
+  //     for (auto iTrip = 0; iTrip < nTripHit; iTrip++) {
+  //       nTripletsSelected += tripsHit[iTrip];  // implicit cast to int
+  //     }
+  //   }
+  //   LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
+  // }
+  // else {
+  //   fQueue.copy(fGraphConstructor.fTripletsSelected_Other, xpu::d2h);
+  //   xpu::h_view vfNTripletsSelected(fGraphConstructor.fTripletsSelected_Other);
+  //   size_t nTripletsSelected = 0;
+  //   for (auto iHit = 0; iHit < vfNTripletsSelected.size(); iHit++) {
+  //     const auto& tripsHit = vfNTripletsSelected[iHit];
+  //     const int nTripHit   = vfNTriplets[iHit];  // uninitialized after nTripHit
+  //     for (auto iTrip = 0; iTrip < nTripHit; iTrip++) {
+  //       nTripletsSelected += tripsHit[iTrip];  // implicit cast to int
+  //     }
+  //   }
+  //   LOG(info) << "GPU Tracking: Num Triplets after fitting: " << nTripletsSelected;
+  // }
 
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                           = xpu::pop_timer();
     fEventTimeMonitor.FitTripletsOT_time[fIteration] = step_time;
     xpu::push_timer("ConstructCandidates_time");
   }
-
   // fQueue.launch<ConstructCandidates>(xpu::n_blocks(embedHitsBlocks));
-
   if constexpr (constants::gpu::GpuTimeMonitoring) {
     xpu::timings step_time                                 = xpu::pop_timer();
     fEventTimeMonitor.ConstructCandidates_time[fIteration] = step_time;
     // LOG(info) << "ConstructCandidates_time: " << step_time.wall();
-    // xpu::push_timer("ConstructCandidates_time");
+    xpu::push_timer("Additional_time");
   }
 
   fGraphConstructor.fIterationData.reset(0, xpu::buf_device);
   fGraphConstructor.fvGpuGrid.reset(0, xpu::buf_io);
   fGraphConstructor.fgridFirstBinEntryIndex.reset(0, xpu::buf_io);
   fGraphConstructor.fgridEntries.reset(0, xpu::buf_io);
-
   xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);  //TODO: check if we need to reset all the buffers here
 
-  if constexpr (constants::gpu::GpuTimeMonitoring) {
-    xpu::timings t                           = xpu::pop_timer();
-    fEventTimeMonitor.Total_time[fIteration] = t;
-    fEventTimeMonitor.PrintTimings(fIteration);
-  }
-
   fQueue.copy(fGraphConstructor.fNNeighbours, xpu::d2h);
-
-  // save triplets as tracks
   fQueue.copy(fGraphConstructor.fNTriplets, xpu::d2h);
-
   if (fIteration == 0) {
     fQueue.copy(fGraphConstructor.fTriplets_FastPrim, xpu::d2h);
     fQueue.copy(fGraphConstructor.fTripletsSelected_FastPrim, xpu::d2h);
     fQueue.copy(fGraphConstructor.fvTripletParams_FastPrim, xpu::d2h);
   }
   else {
-    fQueue.copy(fGraphConstructor.fDoublets_Other, xpu::d2h);  // save doublets as tracks
-
+    // fQueue.copy(fGraphConstructor.fDoublets_Other, xpu::d2h);  // save doublets as tracks
     fQueue.copy(fGraphConstructor.fTriplets_Other, xpu::d2h);
     fQueue.copy(fGraphConstructor.fTripletsSelected_Other, xpu::d2h);
     fQueue.copy(fGraphConstructor.fvTripletParams_Other, xpu::d2h);
+  }
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                        = xpu::pop_timer();
+    fEventTimeMonitor.Additional_time[fIteration] = step_time;
+    xpu::push_timer("Competition_time");
+  }
+  FindTracks(fIteration, true);
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings step_time                         = xpu::pop_timer();
+    fEventTimeMonitor.Competition_time[fIteration] = step_time;
   }
 
   // Debugging
   // SaveDoubletsAsTracks();
   // SaveTripletsAsTracks();
   // SaveFittedTripletsAsTracks();
-  if (fIteration == 0) {
-    FindTracks(fIteration, true);
-  }
-  else if (fIteration == 1) {
-    FindTracks(fIteration, true);
-  }
-  else if (fIteration == 3) {
-    FindTracks(fIteration, true);
+  // if (fIteration == 0) {
+  //   FindTracks(fIteration, true);
+  // }
+  // else if (fIteration == 1) {
+  //   FindTracks(fIteration, true);
+  // }
+  // else if (fIteration == 3) {
+  //   FindTracks(fIteration, true);
+  // }
+
+  if constexpr (constants::gpu::GpuTimeMonitoring) {
+    xpu::timings t                           = xpu::pop_timer();
+    fEventTimeMonitor.Total_time[fIteration] = t;
+    fEventTimeMonitor.PrintTimings(fIteration);
   }
 }
 
@@ -521,7 +520,7 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
       }
     }
   }
-  LOG(info) << "FindTracksCpu(): Num triplets used for making tracks: " << nTriplets;
+  // LOG(info) << "FindTracksCpu(): Num triplets used for making tracks: " << nTriplets;
 
   /// organize triplets by station
   const int NStations = 12;
@@ -677,7 +676,7 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
     }
   }
 
-  LOG(info) << "Num tracks constructed: " << tracklets.size();
+  // LOG(info) << "Num tracks constructed: " << tracklets.size();
 
   std::vector<std::pair<std::vector<int>, float>> trackAndScores;
   const int min_length = 4;
@@ -689,7 +688,7 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
         trackAndScores.push_back(std::make_pair(tracklets[itracklet], trackletScores[itracklet]));
       }
     }
-    LOG(info) << "[iter 0] Num candidate tracks with length > 4 : " << trackAndScores.size();
+    // LOG(info) << "[iter 0] Num candidate tracks with length > 4 : " << trackAndScores.size();
 
     /// remove tracks with chi2 > max_chi2. where max_chi2 is 10*(2*hits - 5) //@TODO: check this
     float trackChi2Cut = 10.0f;                 // When not fitting candidates and using q/p proxy to chi2.
@@ -701,7 +700,7 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
         iTrack--;
       }
     }
-    LOG(info) << "[iter 0] Num tracks after tracks chi2 cut: " << trackAndScores.size();
+    // LOG(info) << "[iter 0] Num tracks constructed after tracks chi2 cut: " << trackAndScores.size();
   }
   else if (fIteration == 3) {  // iter 3
     // min length condition
@@ -717,13 +716,13 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
         trackletScores.push_back(trackletScoresTmp[itracklet]);
       }
     }
-    LOG(info) << "[iter 3] Num candidate tracks with length > 4: " << tracklets.size();
+    // LOG(info) << "[iter 3] Num candidate tracks with length > 4: " << tracklets.size();
 
     std::vector<std::vector<float>> trackCandFitParams;           // KF fit parameters
     FitTracklets(tracklets, trackletScores, trackCandFitParams);  // scores is chi2 here.
 
     if (useCandClassifier_) {
-      LOG(info) << "[iter 3] Using candidate classifier...";
+      // LOG(info) << "[iter 3] Using candidate classifier...";
       std::vector<int> CandClassTopology = {13, 32, 32, 32, 1};
       CandClassifier CandFinder          = CandClassifier(CandClassTopology);
       CandFinder.setTestThreshold(CandClassifierThreshold_);
@@ -776,7 +775,7 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
         // float score = trueCandsScore[iCand];  // classifier score
         trackAndScores.push_back(std::make_pair(Cand, score));
       }
-      LOG(info) << "[iter 3] Num candidate tracks after fitting and classifier filtering: " << trackAndScores.size();
+      LOG(info) << "[iter 3] Candidate tracks after classifier: " << trackAndScores.size();
     }
     else {
       LOG(info) << "[iter 3] No candidate classifier used!";
@@ -787,10 +786,10 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
     }
   }
 
-  if (doCompetition) {  // do track competition
+  if (doCompetition) {
     // CooperativeCompetitionCPU(trackAndScores);
     CooperativeCompetitionGPU(trackAndScores);
-  }  // track competition
+  }
 
   if (iteration == 0) {
     frWData.RecoHitIndices().reserve(200000);
@@ -816,7 +815,6 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
   }
 
   LOG(info) << "FindTracks(): Num tracks after competition: " << trackAndScores.size();
-
   LOG(info) << "Total tracks found in event: " << frWData.RecoTracks().size();
 }
 
@@ -917,10 +915,8 @@ void GnnGpuTrackFinderSetup::CooperativeCompetitionCPU(std::vector<std::pair<std
 
 void GnnGpuTrackFinderSetup::CooperativeCompetitionGPU(std::vector<std::pair<std::vector<int>, float>>& trackAndScores)
 {
-
-  // xpu::device_prop prop{xpu::device::active()};
-
-  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);
+  const int numTracks = trackAndScores.size();
+  if (numTracks == 0) return;
 
   /// sort tracks by length and lower scores (chi2) first
   std::sort(trackAndScores.begin(), trackAndScores.end(),
@@ -930,24 +926,17 @@ void GnnGpuTrackFinderSetup::CooperativeCompetitionGPU(std::vector<std::pair<std
               }
               return a.first.size() > b.first.size();
             });
-  // LOG(info) << "Tracks sorted.";
 
-  const int numKeyFlags = frWData.HitKeyFlags().size();
-  LOG(info) << "Num key flags: " << numKeyFlags;
-  fGraphConstructor.fHitKeyFlags.reset(numKeyFlags, xpu::buf_io);
-  xpu::h_view vfHitKeyFlags{fGraphConstructor.fHitKeyFlags};
-  std::copy_n(frWData.HitKeyFlags().begin(), numKeyFlags, &vfHitKeyFlags[0]);
-  fQueue.copy(fGraphConstructor.fHitKeyFlags, xpu::h2d);
+  { // prepare data for gpu competition
+    fGraphConstructor.fNTracks = numTracks;
 
-  const int numTracks = trackAndScores.size();
-  if (numTracks == 0) return;
-  fGraphConstructor.fNTracks = numTracks;
-  fGraphConstructor.fSelectedTrackIndexes.reset(numTracks, xpu::buf_io);
-  fGraphConstructor.fTrackAndScores.reset(numTracks, xpu::buf_io);
-  fGraphConstructor.fTrackNumHits.reset(numTracks, xpu::buf_io);
-  {
-    xpu::h_view vfSelectedTrackIndexes(fGraphConstructor.fSelectedTrackIndexes);
-    xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
+    fGraphConstructor.fSelectedTrackIndexes.reset(numTracks, xpu::buf_io);
+    fGraphConstructor.fTrack.reset(numTracks, xpu::buf_io);
+    fGraphConstructor.fScores.reset(numTracks, xpu::buf_io);
+    fGraphConstructor.fTrackNumHits.reset(numTracks, xpu::buf_io);
+    xpu::h_view vfSelectedTrackIndexes{fGraphConstructor.fSelectedTrackIndexes};
+    xpu::h_view vfTrack{fGraphConstructor.fTrack};
+    xpu::h_view vfScores{fGraphConstructor.fScores};
     xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
     for (int iTrack = 0; iTrack < numTracks; iTrack++) {
       std::array<int, 12> temp_track;
@@ -957,54 +946,45 @@ void GnnGpuTrackFinderSetup::CooperativeCompetitionGPU(std::vector<std::pair<std
       for (int iHit = 0; iHit < nHits; iHit++) {
         temp_track[iHit] = trackAndScores[iTrack].first[iHit];
       }
-      vfTrackAndScores[iTrack].first  = temp_track;
-      vfTrackAndScores[iTrack].second = trackAndScores[iTrack].second;
-      vfSelectedTrackIndexes[iTrack]  = 0;
+      vfTrack[iTrack]                = temp_track;
+      vfScores[iTrack]               = trackAndScores[iTrack].second;
+      vfSelectedTrackIndexes[iTrack] = 0;
     }
-    fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::h2d);
+    fQueue.copy(fGraphConstructor.fTrack, xpu::h2d);
+    fQueue.copy(fGraphConstructor.fScores, xpu::h2d);
     fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::h2d);
     fQueue.copy(fGraphConstructor.fSelectedTrackIndexes, xpu::h2d);
-  }
-  LOG(info) << "Data prepared for GPU.";
 
-  fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::d2h);
-  xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
-  for (int i = 0; i < 10; i++) {
-    LOG(info) << "nhits: " << vfTrackNumHits[i];
-  }
-
-  fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::d2h);
-  xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
-  for (int i = 0; i < 10; ++i) {
-    LOG(info) << "track " << i << " chi2: " << vfTrackAndScores[i].second << " hit0: " << vfTrackAndScores[i].first[0];
+    const int numKeyFlags = frWData.HitKeyFlags().size();
+    fGraphConstructor.fHitKeyFlags.reset(numKeyFlags, xpu::buf_io);
+    xpu::h_view vfHitKeyFlags{fGraphConstructor.fHitKeyFlags};
+    std::copy_n(frWData.HitKeyFlags().begin(), numKeyFlags, &vfHitKeyFlags[0]);
+    fQueue.copy(fGraphConstructor.fHitKeyFlags, xpu::h2d);
   }
 
-  if constexpr (constants::gpu::GpuTimeMonitoring) {
-    fEventTimeMonitor.nIterations = fIteration;
-    xpu::push_timer("Competition_time");
-  }
+  xpu::set<strGnnGpuGraphConstructor>(fGraphConstructor);  // set memory on gpu
+  // LOG(info) << "Data prepared for GPU.";
+
   fQueue.launch<Competition>(xpu::n_blocks(1));
-  if constexpr (constants::gpu::GpuTimeMonitoring) {
-    xpu::timings step_time                         = xpu::pop_timer();
-    fEventTimeMonitor.Competition_time[fIteration] = step_time;
-  }
-  LOG(info) << "GPU competition done.";
-
-  fQueue.copy(fGraphConstructor.fSelectedTrackIndexes, xpu::d2h);
-  fQueue.copy(fGraphConstructor.fTrackAndScores, xpu::d2h);
-  fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::d2h);
+  // LOG(info) << "GPU competition done.";
 
   // copy trackAndScores back to CPU
   {
-    xpu::h_view vfSelectedTrackIndexes(fGraphConstructor.fSelectedTrackIndexes);
-    xpu::h_view vfTrackAndScores{fGraphConstructor.fTrackAndScores};
+    fQueue.copy(fGraphConstructor.fSelectedTrackIndexes, xpu::d2h);
+    fQueue.copy(fGraphConstructor.fTrack, xpu::d2h);
+    fQueue.copy(fGraphConstructor.fScores, xpu::d2h);
+    fQueue.copy(fGraphConstructor.fTrackNumHits, xpu::d2h);
+    xpu::h_view vfSelectedTrackIndexes{fGraphConstructor.fSelectedTrackIndexes};
+    xpu::h_view vfTrack{fGraphConstructor.fTrack};
+    xpu::h_view vfScores{fGraphConstructor.fScores};
     xpu::h_view vfTrackNumHits{fGraphConstructor.fTrackNumHits};
     // go over selected tracks and copy to track and scores.
     trackAndScores.clear();
     for (int iTrack = 0; iTrack < numTracks; iTrack++) {
       if (vfSelectedTrackIndexes[iTrack] != 1) continue;
-      const auto& [trackAllStations, score] = vfTrackAndScores[iTrack];
-      const int nHitsInTrack                = vfTrackNumHits[iTrack];
+      const auto& trackAllStations = vfTrack[iTrack];
+      const float score            = vfScores[iTrack];
+      const int nHitsInTrack       = vfTrackNumHits[iTrack];
       if (nHitsInTrack < 4) continue;
       std::vector<int> track;
       for (int iHit = 0; iHit < 12; iHit++) {
@@ -1017,7 +997,7 @@ void GnnGpuTrackFinderSetup::CooperativeCompetitionGPU(std::vector<std::pair<std
       trackAndScores.push_back(std::make_pair(track, score));
     }
   }
-  LOG(info) << "Num tracks found after competition on GPU: " << trackAndScores.size();
+  // LOG(info) << "Num tracks found after competition on GPU: " << trackAndScores.size();
 }
 
 void GnnGpuTrackFinderSetup::FitTracklets(std::vector<std::vector<int>>& tracklets, std::vector<float>& trackletScores,
@@ -1048,7 +1028,7 @@ void GnnGpuTrackFinderSetup::FitTracklets(std::vector<std::vector<int>>& trackle
 
   frTrackFitter.FitGNNTracklets(frInput, frWData, GNNTrackCandidates, GNNTrackHits, selectedTrackIndexes,
                                 selectedTrackScores, selectedTrackFitParams, 3);
-  LOG(info) << "Candidate tracks fitted with KF.";
+  // LOG(info) << "Candidate tracks fitted with KF.";
 
   /// print track params of first 10 tracks
   // for (int i = 0; i < 10; i++) {
@@ -1070,7 +1050,7 @@ void GnnGpuTrackFinderSetup::FitTracklets(std::vector<std::vector<int>>& trackle
     trackletFitParams.push_back(selectedTrackFitParams[i]);
     tracklets.push_back(trackletsTmp[selectedTrackIndexes[i]]);
   }
-  LOG(info) << "Num tracks after KF fit: " << trackletScores.size();
+  LOG(info) << "Tracks after fitting: " << trackletScores.size();
 }  // FitTracklets
 
 void GnnGpuTrackFinderSetup::SetupGNN(const int iteration)

@@ -40,6 +40,7 @@ namespace cbm::algo::ca
     xpu::timings CompressTripletsOT_time[4];
     xpu::timings FitTripletsOT_time[4];
     xpu::timings ConstructCandidates_time[4];
+    xpu::timings Additional_time[4];
     xpu::timings Competition_time[4];
 
     int nIterations;
@@ -58,17 +59,17 @@ namespace cbm::algo::ca
                   << t.wall() << std::endl;
       };
 
-      print_timing("PrepareData_time", PrepareData_time[iteration]);
-      print_timing("MakeSinglets_time", MakeSinglets_time[iteration]);
-      print_timing("MakeDoublets_time", MakeDoublets_time[iteration]);
-      print_timing("CompressDoublets_time", CompressDoublets_time[iteration]);
-      print_timing("ResetDoublets_time", ResetDoublets_time[iteration]);
-      print_timing("FitDoublets_time", FitDoublets_time[iteration]);
-      print_timing("MakeTriplets_time", MakeTriplets_time[iteration]);
-      print_timing("CompressTriplets_time", CompressTriplets_time[iteration]);
-      print_timing("ResetTriplets_time", ResetTriplets_time[iteration]);
-      print_timing("FitTriplets_time", FitTriplets_time[iteration]);
-      print_timing("SortTriplets_time", SortTriplets_time[iteration]);
+      // print_timing("PrepareData_time", PrepareData_time[iteration]);
+      // print_timing("MakeSinglets_time", MakeSinglets_time[iteration]);
+      // print_timing("MakeDoublets_time", MakeDoublets_time[iteration]);
+      // print_timing("CompressDoublets_time", CompressDoublets_time[iteration]);
+      // print_timing("ResetDoublets_time", ResetDoublets_time[iteration]);
+      // print_timing("FitDoublets_time", FitDoublets_time[iteration]);
+      // print_timing("MakeTriplets_time", MakeTriplets_time[iteration]);
+      // print_timing("CompressTriplets_time", CompressTriplets_time[iteration]);
+      // print_timing("ResetTriplets_time", ResetTriplets_time[iteration]);
+      // print_timing("FitTriplets_time", FitTriplets_time[iteration]);
+      // print_timing("SortTriplets_time", SortTriplets_time[iteration]);
       // GNN GPU
       print_timing("EmbedHits_time", EmbedHits_time[iteration]);
       print_timing("NearestNeighbours_time", NearestNeighbours_time[iteration]);
@@ -77,6 +78,7 @@ namespace cbm::algo::ca
       print_timing("FitTripletsOT_time", FitTripletsOT_time[iteration]);
       print_timing("ConstructCandidates_time", ConstructCandidates_time[iteration]);
       print_timing("Competition_time", Competition_time[iteration]);
+      print_timing("Additional_time", Additional_time[iteration]);
       print_timing("Total_time", Total_time[iteration]);
     }
   };
@@ -119,7 +121,6 @@ namespace cbm::algo::ca
     xpu::timings GetEmbedHitsTime(int ev, int it) { return xpuTimings[ev].EmbedHits_time[it]; }
 
     xpu::timings GetNearestNeightboursTime(int ev, int it) { return xpuTimings[ev].NearestNeighbours_time[it]; }
-
 
    private:
     std::vector<XpuTimings> xpuTimings;

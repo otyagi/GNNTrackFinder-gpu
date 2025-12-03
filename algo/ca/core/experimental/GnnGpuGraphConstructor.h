@@ -181,7 +181,6 @@ namespace cbm::algo::ca
     XPU_D void CompressAllTripletsOrdered(CompressAllTripletsOrdered::context&) const;
 
 
-
    private:
     XPU_D void EmbedSingleHit(std::array<float, 3>& input, std::array<float, 6>& result) const;
 
@@ -271,8 +270,9 @@ namespace cbm::algo::ca
     xpu::buffer<std::array<std::array<float, 7>, kNN_Other * kNN_Other>> fvTripletParams_Other;
 
     /// Track competition
-    xpu::buffer<std::pair<std::array<int, 12>, float>> fTrackAndScores;  // array of hit indexes and chi2 value
-    xpu::buffer<bool> fSelectedTrackIndexes;                             // 0 - remove, 1 - selected.
+    xpu::buffer<std::array<int, 12>> fTrack;  // array of hit indexes
+    xpu::buffer<float> fScores;               // chi2 value
+    xpu::buffer<int> fSelectedTrackIndexes;  // 0 - remove, 1 - selected.
     xpu::buffer<int> fTrackNumHits;           // num hits in each track. -1 is no hit
     xpu::buffer<unsigned char> fHitKeyFlags;  // from fWindowData::fvbHitKeyFlags
     int fNTracks;

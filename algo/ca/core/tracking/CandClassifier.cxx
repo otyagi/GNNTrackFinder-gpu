@@ -245,9 +245,9 @@ void CandClassifier::run(const Matrix& allEdges, std::vector<int>& trueEdgesInde
     }  // sub Batch loop
   }  // batch loop
 
-  std::cout << "True Edges = " << nTrueEdges << ", False Edges = " << nFakeEdges << std::endl;
+  // std::cout << "True Edges = " << nTrueEdges << ", False Edges = " << nFakeEdges << "\n";
 
-  std::cout << "Run End. " << std::endl;
+  // std::cout << "Run End. \n";
 }
 
 
@@ -831,7 +831,7 @@ void CandClassifier::loadModel(std::string& fNameWeights, std::string& fNameBias
   }
   fin.close();
 
-  std::cout << "Candidate Classifier Model loaded. \n";
+  // std::cout << "Candidate Classifier Model loaded. \n";
 }
 
 

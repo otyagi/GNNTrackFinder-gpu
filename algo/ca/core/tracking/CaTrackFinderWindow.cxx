@@ -139,7 +139,7 @@ namespace cbm::algo::ca
       setenv("XPU_PROFILE", "1", 1);
       xpu::settings settings;
       //      settings.device = "cpu0";
-      settings.device = "hip0";  //hip1 - MI50, hip0 - radeon VII
+      settings.device = "hip1";  //hip1 - MI100, hip0 - radeon VII
       //      settings.verbose = true;
       xpu::initialize(settings);
 
@@ -989,7 +989,6 @@ namespace cbm::algo::ca
     xpu::push_timer("SetupGNNTime");
     GnnGpuTrackFinderSetup.SetupGNN(iteration);
     xpu::timings SetupGNNTime = xpu::pop_timer();
-    LOG(info) << "GPU tracking :: SetupGNNTime iter" << iteration << " " << SetupGNNTime.wall() << " ms";
 
     xpu::push_timer("RunGpuTracking");
     GnnGpuTrackFinderSetup.RunGpuTracking();
@@ -999,6 +998,7 @@ namespace cbm::algo::ca
       LOG(info) << "GPU tracking :: SetupGrid: " << SetupGridTime.wall() << " ms";
       LOG(info) << "GPU tracking :: SetupIterationData: " << SetupIterationDataTime.wall() << " ms";
       LOG(info) << "GPU tracking :: SetupMetricLearning iter " << iteration << ": " << SetupGNNTime.wall() << " ms";
+      LOG(info) << "GPU tracking :: SetupGNNTime iter" << iteration << " " << SetupGNNTime.wall() << " ms";
       LOG(info) << "GPU tracking :: RunGpuTracking: " << RunGpuTracking.wall() << " ms";
     }
   }
