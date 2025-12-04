@@ -787,8 +787,8 @@ void GnnGpuTrackFinderSetup::FindTracks(const int iteration, const bool doCompet
   }
 
   if (doCompetition) {
-    // CooperativeCompetitionCPU(trackAndScores);
-    CooperativeCompetitionGPU(trackAndScores);
+    CooperativeCompetitionCPU(trackAndScores);
+    // CooperativeCompetitionGPU(trackAndScores);
   }
 
   if (iteration == 0) {

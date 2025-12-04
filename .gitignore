@@ -20,3 +20,6 @@ Dart*.cfg
 
 # IDEs
 .vscode
+
+# Data
+/macro/run/urqmd_centr*
