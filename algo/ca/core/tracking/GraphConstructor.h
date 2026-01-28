@@ -14,6 +14,7 @@
 // #include "CaTriplet.h"
 // #include "CaVector.h"
 #include "CaTrackFitter.h"
+#include "CaTrackingMonitor.h"
 #include "EmbedNet.h"
 #include "MLPutil.h"
 
@@ -22,7 +23,8 @@ namespace cbm::algo::ca
   class alignas(kf::VcMemAlign) GraphConstructor {
    public:
     /// Constructor
-    GraphConstructor(const ca::InputData& input, WindowData& wData, TrackFitter& fTrackFitter);
+    GraphConstructor(const ca::InputData& input, WindowData& wData, TrackFitter& fTrackFitter,
+                     TrackingMonitorData& fMonitorData);
 
     /// Destructor
     ~GraphConstructor() = default;
@@ -51,6 +53,9 @@ namespace cbm::algo::ca
 
     void CreateMetricLearningDoubletsJump(const int iter);
 
+    inline void buildCSR(const std::vector<std::pair<int, int>>& edges, std::vector<int>& offset,
+                         std::vector<int>& list, const int Nhits);
+
     /// -- VARIABLES
 
     std::vector<std::vector<unsigned int>> doublets[20];  // [sta][lhit][mhit]
@@ -67,6 +72,7 @@ namespace cbm::algo::ca
     std::vector<std::pair<std::vector<int>, float>> trackAndScores;  // [trackIndex, trackScore]
 
    private:
+    TrackingMonitorData& frMonitorData;  ///< Reference to monitor data
     const ca::InputData& frInput;
     WindowData& frWData;
     TrackFitter& frTrackFitter;

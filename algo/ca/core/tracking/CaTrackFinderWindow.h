@@ -100,7 +100,7 @@ namespace cbm::algo::ca
 
     void SetupGnnGpuTrackFinder(GnnGpuTrackFinderSetup& GnnGpuTrackFinderSetup);
 
-    void GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration, TrackFitter& fTrackFitter);
+    void GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration, TrackFitter& fTrackFitter, TrackingMonitorData& fMonitorData);
 
     // ** Functions, which pack and unpack indexes of station and triplet **
 

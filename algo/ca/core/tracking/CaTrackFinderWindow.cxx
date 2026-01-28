@@ -138,8 +138,8 @@ namespace cbm::algo::ca
       // - should not be initialized here
       setenv("XPU_PROFILE", "1", 1);
       xpu::settings settings;
-      //      settings.device = "cpu0";
-      settings.device = "hip1";  //hip1 - MI100, hip0 - radeon VII
+      // settings.device = "cpu0";
+      settings.device = "hip0";  //hip1 - MI100, hip0 - radeon VII
       //      settings.verbose = true;
       xpu::initialize(settings);
 
@@ -194,7 +194,7 @@ namespace cbm::algo::ca
           ConstructGnnTripletsGpu(wData, GnnGpuTrackFinderSetup.value(), iter_num);
         }
         else {
-          GNNTrackFinder(input, wData, iter_num, fTrackFitter);
+          GNNTrackFinder(input, wData, iter_num, fTrackFitter, frMonitorData);
         }
         frMonitorData.StopTimer(ETimer::GNNTracking);
 
@@ -1005,15 +1005,15 @@ namespace cbm::algo::ca
 
   // -------------------------------------------------------------------------------------------------------------------
   void TrackFinderWindow::GNNTrackFinder(const ca::InputData& input, WindowData& wData, const int iteration,
-                                         TrackFitter& trackFitter)
+                                         TrackFitter& trackFitter, TrackingMonitorData& monitorData)
   {
-    GraphConstructor graphConstructor(input, wData, trackFitter);
+    GraphConstructor graphConstructor(input, wData, trackFitter, monitorData);
 
     // Argument to run classifier is:
     // 0 - Triplets as tracks, 1 - Candidates, 2 - Tracks
     switch (iteration) {
       case 0: graphConstructor.FindFastPrim(2); break;
-      case 1: graphConstructor.FindSlowPrimJump(0); break;
+      case 1: graphConstructor.FindSlowPrimJump(2); break;
       case 2: return;
       case 3: graphConstructor.FindAllSecJump(2); break;
       default: LOG(info) << "Unexpected iteration index: " << iteration; break;

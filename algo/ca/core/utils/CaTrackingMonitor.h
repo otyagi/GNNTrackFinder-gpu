@@ -72,6 +72,7 @@ namespace cbm::algo::ca
               SuppressHitKeys,
               GNNTracking,
               MetricLearning,
+              Embedding,
               NearestNeighbours,
               TripletConstruction,
               TripletFit,
@@ -140,6 +141,7 @@ namespace cbm::algo::ca
       SetTimerName(ETimer::Qa, "QA");
       SetTimerName(ETimer::GNNTracking, "GNN Tracking");
       SetTimerName(ETimer::MetricLearning, "Metric Learning");
+      SetTimerName(ETimer::Embedding, "Embedding Time");
       SetTimerName(ETimer::NearestNeighbours, "kNN Nearest Neighbours");
       SetTimerName(ETimer::TripletConstruction, "Triplet Construction");
       SetTimerName(ETimer::TripletFit, "Triplet Fit");
